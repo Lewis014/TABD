@@ -1,0 +1,5 @@
+# Dependencias para la fase local (FAISS, benchmark y evaluación)
+faiss-cpu>=1.7.4
+numpy>=1.24.0
+pandas>=2.0.0
+pyarrow>=14.0.0
