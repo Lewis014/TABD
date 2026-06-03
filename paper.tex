@@ -34,68 +34,57 @@ San Agustín, Arequipa, Perú\\
 \section{Introducción}
 % -------------------------------------------------------
 
-% Párrafo 1 — Marco conceptual: el problema general y su importancia
-¿Cuánta literatura científica cabe hoy en un solo repositorio? A mayo de 2026,
-ArXiv supera los 2,6 millones de artículos \cite{ref1} y PubMed indexa más de 38
-millones de registros biomédicos \cite{ref2}. Ese volumen rompe la búsqueda por
-palabras clave: dos abstracts pueden describir la misma idea sin compartir un solo
-término. Para sortear ese obstáculo, los sistemas modernos representan cada
+% Párrafo 1 — Marco conceptual: el problema y su importancia
+La literatura científica crece a un ritmo que desborda los métodos de búsqueda
+tradicionales. A mayo de 2026, ArXiv supera los 2,6 millones de artículos
+\cite{ref1} y PubMed indexa más de 38 millones de registros biomédicos \cite{ref2}.
+Sobre colecciones de esa magnitud, la búsqueda por coincidencia de palabras clave
+resulta insuficiente: dos abstracts pueden describir la misma idea sin compartir un
+solo término. Para salvar esa distancia, los sistemas actuales representan cada
 documento como un vector denso de alta dimensionalidad ---un \textit{embedding}---
-capaz de capturar parecido semántico más allá del vocabulario literal \cite{ref3}.
-La dificultad reaparece al consultar. Recuperar el vecino más cercano de forma
-exacta obliga a comparar la consulta contra todos los vectores del corpus, un costo
-$O(N \cdot d)$ que crece de forma lineal con el tamaño de la colección; sobre
-millones de documentos, la latencia por consulta se dispara hasta volverse
-impracticable para cualquier uso interactivo. Por eso la recuperación a gran escala
-descansa en métodos de búsqueda aproximada del vecino más cercano (ANN), que ceden
-una fracción mínima de exactitud a cambio de respuestas órdenes de magnitud más
-veloces \cite{ref4}.
+capaz de capturar similitud semántica más allá del vocabulario literal \cite{ref3}.
+La dificultad reaparece al consultar: recuperar el vecino más cercano de forma
+exacta exige comparar la consulta contra todos los vectores del corpus, un costo
+$O(N \cdot d)$ que crece linealmente con el tamaño de la colección y vuelve la
+latencia impracticable sobre millones de documentos. Por ello, la recuperación a
+gran escala se apoya en métodos de búsqueda aproximada del vecino más cercano (ANN),
+que ceden una fracción mínima de exactitud a cambio de respuestas mucho más veloces
+\cite{ref4}.
 
-% Párrafo 2 — Antecedentes: lo que sabemos (HNSW como solución establecida)
+% Párrafo 2 — Antecedentes: HNSW y los dos factores que rigen su rendimiento
 Entre los algoritmos ANN, Hierarchical Navigable Small World (HNSW) \cite{ref5} se
-ha consolidado como el estándar de facto para búsqueda semántica a gran escala.
+ha consolidado como el estándar de facto para la búsqueda semántica a gran escala.
 Inspirado en la teoría de redes de mundo pequeño \cite{ref6}, organiza los vectores
-en una jerarquía multi-capa donde las capas superiores permiten una navegación
-global eficiente y la capa base concentra la conectividad local; el resultado es
-una complejidad de consulta $O(\log N)$ con recalls superiores al 97\% en
-benchmarks canónicos \cite{ref5}. Esta eficiencia ha motivado su adopción como
-índice primario en plataformas de producción como FAISS \cite{ref7} y Milvus
-\cite{ref8}. No obstante, el rendimiento del índice depende de dos factores
-críticos: su parametrización interna y la métrica de similitud empleada.
-
-% Párrafo 3 — Antecedentes específicos: los dos factores que determinan el rendimiento
-La parametrización y la métrica de similitud determinan directamente la calidad y
-velocidad de la recuperación. En cuanto a la parametrización, Zhao et al.~\cite{ref9}
-demuestran que una poda jerárquica mediante el parámetro $\lambda$ reduce el tiempo
-de construcción hasta $1.27\times$ manteniendo Recall@10 $>$ 97\% sobre SIFT1M,
-lo que evidencia que los hiperparámetros $M$ y \textit{ef\_construction} gobiernan
-el equilibrio entre velocidad de indexación y exactitud de recuperación. En cuanto
-a la métrica, dentro de los sistemas de generación aumentada por recuperación
-(RAG) \cite{ref10}, Elkiran y Rasheed \cite{ref11} evalúan coseno, producto interno
-y L2 sobre el corpus SQuAD \cite{ref12}: coseno y producto interno alcanzan R@10
-entre 0.909 y 0.925, mientras que L2 sobre vectores no normalizados colapsa
-a R@10 $= 0.373$. Estos hallazgos, sin embargo, provienen de colecciones de
-propósito general que no capturan las particularidades del lenguaje científico
+en una jerarquía multi-capa que alcanza una complejidad de consulta $O(\log N)$ con
+recalls superiores al 97\% en benchmarks canónicos \cite{ref5}; esta eficiencia
+explica su adopción como índice primario en plataformas como FAISS \cite{ref7} y
+Milvus \cite{ref8}. Su rendimiento, no obstante, depende de dos factores críticos.
+El primero es la parametrización interna: Zhao et al.~\cite{ref9} demuestran que el
+ajuste de $M$ y \textit{ef\_construction} gobierna el equilibrio entre la velocidad
+de construcción del índice y la exactitud de la recuperación. El segundo es la
+métrica de similitud; en el contexto de los sistemas de generación aumentada por
+recuperación (RAG) \cite{ref10}, Elkiran y Rasheed \cite{ref11} muestran que, sobre
+el corpus SQuAD \cite{ref12}, el coseno alcanza R@10 entre 0.909 y 0.925 mientras
+que la distancia euclídea sin normalizar colapsa a 0.373. Ambos resultados, sin
+embargo, provienen de colecciones de propósito general ajenas al lenguaje científico
 especializado.
 
-% Párrafo 4 — Vacío de conocimiento: lo que no sabemos
-Ningún trabajo ha evaluado HNSW en corpus de abstracts científicos con vocabulario
-especializado y distribución temática heterogénea. Los benchmarks disponibles se
-limitan a imágenes o texto conversacional \cite{ref11,ref12}, sin considerar la
-densidad terminológica ni la polisemia disciplinar propia de la literatura
-académica. Tampoco existe un benchmark sistemático que combine modelos de embedding
+% Párrafo 3 — Vacío de conocimiento
+A pesar de su amplio estudio, HNSW no se ha evaluado sobre corpus de abstracts
+científicos, caracterizados por un vocabulario especializado y una distribución
+temática heterogénea. No existe un benchmark que combine modelos de embedding
 científico ---como SciBERT o E5-large--- con un análisis controlado del impacto de
-$M$ y \textit{ef\_construction} sobre métricas de recuperación (Recall@K, MRR) en
-ese dominio. Esta ausencia limita la transferibilidad de las recomendaciones de
+$M$ y \textit{ef\_construction} sobre las métricas de recuperación (Recall@K, MRR)
+en ese dominio. Esta ausencia limita la transferibilidad de las recomendaciones de
 parametrización existentes a contextos reales de recuperación en literatura
 científica.
 
-% Párrafo 5 — Objetivo (estación terminal): exclusivamente el objetivo del trabajo
-El presente trabajo evalúa experimentalmente HNSW indexado sobre FAISS para
-búsqueda semántica de abstracts del dataset \textit{arxiv-abstracts-2021},
+% Párrafo 4 — Objetivo
+El presente trabajo evalúa experimentalmente HNSW indexado sobre FAISS para la
+búsqueda semántica de abstracts del conjunto \textit{arxiv-abstracts-2021},
 comparando los modelos SciBERT y E5-large bajo distintas configuraciones de $M$,
-\textit{ef\_construction} y métrica de similitud, con el propósito de identificar
-la parametrización óptima que maximice Recall@K y MRR minimizando la latencia de
+\textit{ef\_construction} y métrica de similitud, con el propósito de identificar la
+parametrización óptima que maximice Recall@K y MRR minimizando la latencia de
 consulta en corpus de literatura científica.
 
 % -------------------------------------------------------
