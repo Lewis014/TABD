@@ -92,52 +92,54 @@ consulta en corpus de literatura científica.
 % -------------------------------------------------------
 
 Los algoritmos ANN surgen como solución práctica a la inviabilidad computacional de
-k-NN exacto en espacios de alta dimensionalidad. Mathur y Chhabra \cite{ref4} los
-clasifican en cuatro familias ---fuerza bruta, árboles, cuantización y grafos---,
-y señalan a los métodos basados en grafos como los más competitivos cuando crece la
-dimensión. HNSW \cite{ref5} encarna esa familia: levanta una jerarquía multi-capa
-inspirada en las redes de mundo pequeño \cite{ref6}, donde las capas altas ofrecen
-saltos largos y dispersos y la capa base afina la búsqueda local, con un costo de
-consulta $O(\log N)$. Sobre esta idea base han surgido numerosas optimizaciones.
-Iwasaki y Miyazaki \cite{ref13} ajustan los grados de entrada y salida de cada
-nodo ---recortando aristas salientes redundantes sin perder exactitud--- para
-acelerar las consultas en datos de alta dimensión. Xi Zhao et al.~\cite{ref14},
-por su parte, atacan el costo de armado con LSH-APG, un esquema que apoya la
-inserción de puntos en una búsqueda ligera basada en hashing sensible a la
-localidad y permite mantener el grafo de forma incremental conforme el conjunto
-crece.
+k-NN exacto en espacios de alta dimensionalidad. Mathur y Chhabra \cite{ref4}
+clasifican los algoritmos ANN en cuatro familias ---fuerza bruta, árboles,
+cuantización y grafos--- y señalan a los métodos basados en grafos como los más
+competitivos cuando crece la dimensión. HNSW \cite{ref5} encarna esa familia:
+construye una jerarquía multi-capa inspirada en las redes de mundo pequeño
+\cite{ref6}, donde las capas altas ofrecen saltos largos y dispersos y la capa base
+afina la búsqueda local, con un costo de consulta $O(\log N)$. Sobre esta idea
+base han surgido numerosas optimizaciones. Iwasaki y Miyazaki \cite{ref13} ajustan
+los grados de entrada y salida de cada nodo ---recortando aristas salientes
+redundantes sin perder exactitud--- para acelerar las consultas en datos de alta
+dimensión. X. Zhao et al.~\cite{ref14}, por su parte, abordan el costo de
+construcción con LSH-APG, un esquema que sustenta la inserción de puntos sobre una
+búsqueda ligera basada en hashing sensible a la localidad (LSH) y permite mantener
+el grafo de forma incremental conforme el conjunto crece.
 
-El verdadero talón de Aquiles de HNSW no está en consultar, sino en construir. Cada
-inserción dispara múltiples recorridos multi-capa y un aluvión de cálculos de
-distancia \cite{ref9}. Feifan Zhao et al.~\cite{ref9} responden con H-DMax, que
-introduce un parámetro $\lambda$ para podar vecinos lejanos de forma jerárquica
----severa en las capas bajas, prudente en las altas para no romper la conectividad
-global---, y logran acelerar la construcción hasta $1.27\times$ perdiendo menos del
-0.27\% de Recall@10 sobre SIFT1M ($\lambda=1.10$). La cuantización por producto
-\cite{ref15} sigue otra ruta: comprime los vectores en códigos cortos y, dentro de
-FAISS \cite{ref7}, ofrece la mayor aceleración de armado ($3.6\times$). El precio,
-eso sí, es alto: el recall puede desplomarse hasta el 85\%, lo que la descarta
-cuando la fidelidad no es negociable.
+La principal limitación de HNSW no reside en la consulta, sino en la construcción
+del índice. Cada inserción dispara múltiples recorridos multi-capa y un elevado
+número de cálculos de distancia \cite{ref9}. F. Zhao et al.~\cite{ref9} responden
+con H-DMax, que introduce un parámetro $\lambda$ para podar vecinos lejanos de
+forma jerárquica ---severa en las capas bajas, prudente en las altas para no
+romper la conectividad global---, y logran acelerar la construcción hasta
+$1.27\times$ perdiendo menos del 0.27\% de Recall@10 sobre SIFT1M
+($\lambda=1.10$). La cuantización por producto \cite{ref15} sigue otra ruta:
+comprime los vectores en códigos cortos y, dentro de FAISS \cite{ref7}, ofrece la
+mayor aceleración de construcción ($3.6\times$). El costo, sin embargo, es alto:
+el recall puede caer hasta valores del 85\%, lo que la descarta cuando la
+fidelidad no es negociable.
 
-En el plano de la infraestructura, FAISS \cite{ref7} y Milvus \cite{ref8} marcan la
-referencia para desplegar índices HNSW en producción. Milvus admite coseno,
-producto interno y L2 sobre embeddings densos e híbridos, y es la base de muchos
-pipelines RAG \cite{ref10} recientes. Sobre esa plataforma, Elkiran y Rasheed
-\cite{ref11} ponen a prueba las tres métricas con embeddings de OpenAI
-(3072 dimensiones) y el corpus SQuAD \cite{ref12}: coseno y producto interno rozan
-R@10 $= 0.909$--$0.925$ y MRR $= 0.781$--$0.793$, frente al desplome de L2 sin
-normalizar (R@10 $= 0.373$, MRR $= 0.116$). El umbral de similitud, como recuerda
-la teoría clásica de recuperación de información \cite{ref16}, inclina la balanza
-entre precisión y recall, y la normalización resulta decisiva cuando se trabaja
-con L2.
+En el plano de la infraestructura, FAISS \cite{ref7} y Milvus \cite{ref8}
+constituyen la referencia para desplegar índices HNSW en producción. Milvus admite
+coseno, producto interno y L2 sobre embeddings densos e híbridos, y es la base de
+numerosos pipelines RAG \cite{ref10} recientes. Sobre esa plataforma, Elkiran y
+Rasheed \cite{ref11} evalúan las tres métricas con embeddings de OpenAI
+(3072 dimensiones) y el corpus SQuAD \cite{ref12}: coseno y producto interno
+alcanzan R@10 $= 0.909$--$0.925$ y MRR $= 0.781$--$0.793$, frente a la fuerte
+caída de L2 sin normalizar (R@10 $= 0.373$, MRR $= 0.116$). El umbral de
+similitud, como señala la teoría clásica de recuperación de información
+\cite{ref16}, modula el equilibrio entre precisión y recall, y la normalización
+resulta decisiva cuando se trabaja con L2.
 
-La literatura revisada deja un hueco difícil de ignorar. Nadie ha medido HNSW sobre
-abstracts científicos, con su vocabulario denso y su reparto temático desigual.
-Tampoco existe un banco de pruebas que enfrente modelos de embedding científico
-como SciBERT o E5-large mientras se barren $M$ y \textit{ef\_construction} contra
-Recall@K y MRR. Y los estudios de tipo RAG se quedan en el dominio QA con datasets
-generalistas \cite{ref11,ref12}, ajenos a las particularidades semánticas del texto
-académico. Ese vacío es el que motiva este trabajo.
+La literatura revisada evidencia una laguna relevante. HNSW no ha sido evaluado
+sobre abstracts científicos, caracterizados por un vocabulario denso y una
+distribución temática desigual. Tampoco existe un banco de pruebas que compare
+modelos de embedding científico como SciBERT o E5-large mientras se exploran
+sistemáticamente $M$ y \textit{ef\_construction} contra Recall@K y MRR. Por su
+parte, los estudios de tipo RAG se limitan al dominio QA con datasets
+generalistas \cite{ref11,ref12}, ajenos a las particularidades semánticas del
+texto académico. Ese vacío es el que motiva el presente trabajo.
 
 % -------------------------------------------------------
 \section{Metodología}
