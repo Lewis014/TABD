@@ -6,6 +6,9 @@
 \usepackage{graphicx}
 \usepackage{hyperref}
 \usepackage{color}
+\usepackage{textgreek}
+\usepackage{amsmath}
+\usepackage{float}
 \renewcommand\UrlFont{\color{blue}\rmfamily}
 
 \begin{document}
@@ -25,9 +28,30 @@ San Agustín, Arequipa, Perú\\
 \maketitle
 
 \begin{abstract}
-----
+Exact nearest-neighbor search stops being practical once a corpus reaches millions of
+documents: the cost simply explodes. That is why large-scale semantic retrieval leans
+on approximate nearest-neighbor (ANN) search. The most popular of these algorithms
+today is Hierarchical Navigable Small World (HNSW), yet little is known about how it
+fares on scientific abstracts ---a domain with a sprawling range of topics and a
+dense, specialized vocabulary. We put it to the test on FAISS, over a collection of
+49,000 arXiv abstracts. We compare two very different embedding models, SciBERT
+(specialized in scientific language) and E5-large (general purpose), across 36
+configurations that mix the number of connections per node ($M$), the construction
+breadth (\textit{ef\_construction}), and the similarity metric (cosine and L2); each
+one is measured against an exact brute-force search using Recall@K, MRR, and latency.
+$M$ is the factor that matters: raising it from 8 to 16 lifts Recall@10 from roughly
+0.95 to above 0.98, whereas \textit{ef\_construction} barely adds accuracy and nearly
+triples build time. The best configuration ---SciBERT with cosine, $M=32$, and
+\textit{ef\_construction}$=400$--- reaches a Recall@10 of 0.998 and an MRR of 1.000,
+answering each query in 0.33\,ms. Despite its lower dimensionality, SciBERT runs
+faster and slightly leads on this fidelity metric. That ranking reverses, however, on
+realistic short natural-language queries: there E5-large clearly wins (Recall@10 of
+0.95 versus 0.19 for SciBERT), making it the model to deploy in a real search engine.
+We also release an interactive demo that turns the configuration into a working search
+engine over the indexed corpus.
 
-\keywords{HNSW, búsqueda semántica, embeddings científicos, FAISS, Recall@K}
+\keywords{HNSW \and búsqueda semántica \and embeddings científicos \and FAISS \and
+Recall@K}
 \end{abstract}
 
 % -------------------------------------------------------
@@ -35,109 +59,44 @@ San Agustín, Arequipa, Perú\\
 % -------------------------------------------------------
 
 % Párrafo 1 — Marco conceptual: el problema y su importancia
-La literatura científica crece a un ritmo que desborda los métodos de búsqueda
-tradicionales. A mayo de 2026, ArXiv supera los 2,6 millones de artículos
-\cite{ref1} y PubMed indexa más de 38 millones de registros biomédicos \cite{ref2}.
-Sobre colecciones de esa magnitud, la búsqueda por coincidencia de palabras clave
-resulta insuficiente: dos abstracts pueden describir la misma idea sin compartir un
-solo término. Para salvar esa distancia, los sistemas actuales representan cada
-documento como un vector denso de alta dimensionalidad ---un \textit{embedding}---
-capaz de capturar similitud semántica más allá del vocabulario literal \cite{ref3}.
-La dificultad reaparece al consultar: recuperar el vecino más cercano de forma
-exacta exige comparar la consulta contra todos los vectores del corpus, un costo
-$O(N \cdot d)$ que crece linealmente con el tamaño de la colección y vuelve la
-latencia impracticable sobre millones de documentos. Por ello, la recuperación a
-gran escala se apoya en métodos de búsqueda aproximada del vecino más cercano (ANN),
-que ceden una fracción mínima de exactitud a cambio de respuestas mucho más veloces
-\cite{ref4}.
+La cantidad de literatura científica crece más rápido de lo que cualquier técnica de
+búsqueda convencional puede igualar. Esto se evidencia en las cifras: a mayo de 2026,
+arXiv contenía más de 2,6 millones de publicaciones \cite{ref1}, mientras que PubMed
+indexaba más de 38 millones de registros biomédicos \cite{ref2}. Dado que dos
+abstracts pueden transmitir la misma idea sin usar la misma frase, la búsqueda de
+coincidencias de palabras clave en colecciones como estas es ineficaz. Para cerrar
+esta brecha, los algoritmos existentes capturan la similitud semántica más allá del
+vocabulario literal al representar cada documento como un vector denso de alta
+dimensión, o \textit{embedding} \cite{ref3}. Sin embargo, al realizar consultas, el problema
+reaparece. Recuperar el vecino más cercano de forma exacta obliga a comparar la
+consulta contra todos los vectores del corpus: un costo $O(N \cdot d)$ que crece en
+línea recta con la colección y que, sobre millones de documentos, vuelve la latencia
+inviable. Por lo que, el acceso a gran escala se basa en encontrar a los vecinos más cercanos, lo que sacrifica cierta precisión por una respuesta rápida \cite{ref4}.
 
-% Párrafo 2 — Antecedentes: HNSW y los dos factores que rigen su rendimiento
-Entre los algoritmos ANN, Hierarchical Navigable Small World (HNSW) \cite{ref5} se
-ha consolidado como el estándar de facto para la búsqueda semántica a gran escala.
-Inspirado en la teoría de redes de mundo pequeño \cite{ref6}, organiza los vectores
-en una jerarquía multi-capa que alcanza una complejidad de consulta $O(\log N)$ con
-recalls superiores al 97\% en benchmarks canónicos \cite{ref5}; esta eficiencia
-explica su adopción como índice primario en plataformas como FAISS \cite{ref7} y
-Milvus \cite{ref8}. Su rendimiento, no obstante, depende de dos factores críticos.
-El primero es la parametrización interna: Zhao et al.~\cite{ref9} demuestran que el
-ajuste de $M$ y \textit{ef\_construction} gobierna el equilibrio entre la velocidad
-de construcción del índice y la exactitud de la recuperación. El segundo es la
-métrica de similitud; en el contexto de los sistemas de generación aumentada por
-recuperación (RAG) \cite{ref10}, Elkiran y Rasheed \cite{ref11} muestran que, sobre
-el corpus SQuAD \cite{ref12}, el coseno alcanza R@10 entre 0.909 y 0.925 mientras
-que la distancia euclídea sin normalizar colapsa a 0.373. Ambos resultados, sin
-embargo, provienen de colecciones de propósito general ajenas al lenguaje científico
-especializado.
+Entre los algoritmos de redes neuronales artificiales, el algoritmo de mundo pequeño navegable jerárquico, HNSW \cite{ref5} se ha convertido en el algoritmo estándar para la búsqueda semántica a gran escala. Se basa en el concepto de la teoría de redes de mundo pequeño \cite{ref6}: organiza vectores en una estructura jerárquica multicapa para resolver cada consulta con una complejidad temporal de $O(\log N)$ y logra una tasa de recuperación de más del 97\% en pruebas de rendimiento \cite{ref5}. No es casualidad que se haya convertido en el índice principal para plataformas como FAISS \cite{ref7} y Milvus \cite{ref8}. Sin embargo, este rendimiento no es estático. Por un lado, depende de la parametrización del índice: el ajuste de $M$ y \texttt{ef\_construction} determina el equilibrio entre el coste de creación y la calidad de la memoria \cite{ref9}.
+
+Esto depende de criterios de similitud, cuyos efectos se han estudiado principalmente en el contexto de la generación de respuesta mejorada, ARG \cite{ref10}; Elkiran y Rasheed compararon la distancia coseno, la distancia del producto escalar y la distancia euclidiana en el corpus SQuAD \cite{ref12}. Desafortunadamente, todos estos datos provienen de corpus generales en lugar de términos científicos especializados.
 
 % Párrafo 3 — Vacío de conocimiento
-A pesar de su amplio estudio, HNSW no se ha evaluado sobre corpus de abstracts
-científicos, caracterizados por un vocabulario especializado y una distribución
-temática heterogénea. No existe un benchmark que combine modelos de embedding
-científico ---como SciBERT o E5-large--- con un análisis controlado del impacto de
-$M$ y \textit{ef\_construction} sobre las métricas de recuperación (Recall@K, MRR)
-en ese dominio. Esta ausencia limita la transferibilidad de las recomendaciones de
-parametrización existentes a contextos reales de recuperación en literatura
-científica.
+El modelo HNSW ha sido ampliamente estudiado, pero ha encontrado dificultades en los resúmenes científicos, donde los términos son cerrados y los temas están distribuidos de manera desigual. Necesitábamos un dominio de prueba para comparar diferentes modelos por ejemplo, modelos específicos del dominio como SciBERT y modelos generales como E5-large y para evaluar exhaustivamente la influencia de $M$, \texttt{ef\_construction} y los factores de similitud en el reconocimiento de $K$ y $MRR$. Mientras persista esta deficiencia, las recomendaciones de parametrización actualmente aceptadas no podrán aplicarse directamente a estudios prácticos en la literatura científica.
 
-% Párrafo 4 — Objetivo
-El presente trabajo evalúa experimentalmente HNSW indexado sobre FAISS para la
-búsqueda semántica de abstracts del conjunto \textit{arxiv-abstracts-2021},
-comparando los modelos SciBERT y E5-large bajo distintas configuraciones de $M$,
-\textit{ef\_construction} y métrica de similitud, con el propósito de identificar la
-parametrización óptima que maximice Recall@K y MRR minimizando la latencia de
-consulta en corpus de literatura científica.
+El objetivo de este trabajo es evaluar el rendimiento de la base de datos HNSW indexada por FAISS en la búsqueda semántica abstracta de arXiv y comparar SciBERT con E5-large para $M$, \texttt{ef\_construction} y diferentes combinaciones de características de similitud. En particular, buscamos un esquema de parametrización que minimice la sobreestimación y maximice Recall@$K$ y $MRR$ en búsquedas de literatura científica. Asimismo, evaluamos si la ventaja de un modelo se mantiene cuando la consulta es una frase corta en lenguaje natural, propia del uso real del sistema, y no un abstract completo.
 
 % -------------------------------------------------------
 \section{Trabajos Relacionados}
 % -------------------------------------------------------
 
-Los algoritmos ANN surgen como solución práctica a la inviabilidad computacional de
-k-NN exacto en espacios de alta dimensionalidad. Mathur y Chhabra \cite{ref4} los
-clasifican en cuatro familias ---fuerza bruta, árboles, cuantización y grafos---,
-y señalan a los métodos basados en grafos como los más competitivos cuando crece la
-dimensión. HNSW \cite{ref5} encarna esa familia: levanta una jerarquía multi-capa
-inspirada en las redes de mundo pequeño \cite{ref6}, donde las capas altas ofrecen
-saltos largos y dispersos y la capa base afina la búsqueda local, con un costo de
-consulta $O(\log N)$. Sobre esta idea base han surgido numerosas optimizaciones.
-Iwasaki y Miyazaki \cite{ref13} ajustan los grados de entrada y salida de cada
-nodo ---recortando aristas salientes redundantes sin perder exactitud--- para
-acelerar las consultas en datos de alta dimensión. Xi Zhao et al.~\cite{ref14},
-por su parte, atacan el costo de armado con LSH-APG, un esquema que apoya la
-inserción de puntos en una búsqueda ligera basada en hashing sensible a la
-localidad y permite mantener el grafo de forma incremental conforme el conjunto
-crece.
+La aparición de algoritmos de redes neuronales artificiales (RNA) ofrece una solución práctica al problema del excesivo coste computacional de los algoritmos exactos de $k$-vecinos más cercanos en espacios de alta dimensión. Mathur y Chhabra \cite{ref4} los clasificaron en cuatro categorías: búsqueda extensiva, árboles, cuantificación y métodos basados en grafos. Observaron que los métodos basados en grafos funcionan mejor a medida que aumenta la escala. HNSW \cite{ref5} se incluye en esta categoría: inspirado en las redes de mundo pequeño \cite{ref6}, crea una estructura jerárquica multicapa donde la capa superior proporciona numerosos saltos dispersos y la capa inferior optimiza la búsqueda local con un coste de consulta de $O(\log N)$. Se han desarrollado muchas técnicas de optimización basadas en esta idea básica. Iwasaki y Miyazaki \cite{ref13} aceleraron las consultas en datos a gran escala ajustando las tasas de entrada y salida de cada nodo (eliminando aristas innecesarias sin pérdida de precisión).
 
-El verdadero talón de Aquiles de HNSW no está en consultar, sino en construir. Cada
-inserción dispara múltiples recorridos multi-capa y un aluvión de cálculos de
-distancia \cite{ref9}. Feifan Zhao et al.~\cite{ref9} responden con H-DMax, que
-introduce un parámetro $\lambda$ para podar vecinos lejanos de forma jerárquica
----severa en las capas bajas, prudente en las altas para no romper la conectividad
-global---, y logran acelerar la construcción hasta $1.27\times$ perdiendo menos del
-0.27\% de Recall@10 sobre SIFT1M ($\lambda=1.10$). La cuantización por producto
-\cite{ref15} sigue otra ruta: comprime los vectores en códigos cortos y, dentro de
-FAISS \cite{ref7}, ofrece la mayor aceleración de armado ($3.6\times$). El precio,
-eso sí, es alto: el recall puede desplomarse hasta el 85\%, lo que la descarta
-cuando la fidelidad no es negociable.
 
-En el plano de la infraestructura, FAISS \cite{ref7} y Milvus \cite{ref8} marcan la
-referencia para desplegar índices HNSW en producción. Milvus admite coseno,
-producto interno y L2 sobre embeddings densos e híbridos, y es la base de muchos
-pipelines RAG \cite{ref10} recientes. Sobre esa plataforma, Elkiran y Rasheed
-\cite{ref11} ponen a prueba las tres métricas con embeddings de OpenAI
-(3072 dimensiones) y el corpus SQuAD \cite{ref12}: coseno y producto interno rozan
-R@10 $= 0.909$--$0.925$ y MRR $= 0.781$--$0.793$, frente al desplome de L2 sin
-normalizar (R@10 $= 0.373$, MRR $= 0.116$). El umbral de similitud, como recuerda
-la teoría clásica de recuperación de información \cite{ref16}, inclina la balanza
-entre precisión y recall, y la normalización resulta decisiva cuando se trabaja
-con L2.
+Zhao et al. \cite{ref14} criticaron el coste de desarrollo de LSH-APG, un método de búsqueda ligero basado en un algoritmo hash basado en la localidad que permite la inserción de puntos y mantiene un gráfico incremental a medida que crece el clúster.
 
-La literatura revisada deja un hueco difícil de ignorar. Nadie ha medido HNSW sobre
-abstracts científicos, con su vocabulario denso y su reparto temático desigual.
-Tampoco existe un banco de pruebas que enfrente modelos de embedding científico
-como SciBERT o E5-large mientras se barren $M$ y \textit{ef\_construction} contra
-Recall@K y MRR. Y los estudios de tipo RAG se quedan en el dominio QA con datasets
-generalistas \cite{ref11,ref12}, ajenos a las particularidades semánticas del texto
-académico. Ese vacío es el que motiva este trabajo.
+
+La verdadera debilidad de HNSW no reside en la consulta en sí, sino en la representación. Cada inserción resulta en varias pasadas multicapa y una serie de cálculos de distancia [9]. Feifang Zhao et al. [9] proponen H-DMax que incluye el parámetro λ para extraer los vecinos más lejanos jerárquicamente. Esta liberación es abrupta en las capas inferiores y gradual en las capas superiores para mantener la conectividad general. Esto permite aceleraciones de representación de hasta 1,27 veces, en comparación con SIFT1M (λ = 1,10), mientras que la pérdida de devolución de llamada es menor al 0,27. La cuantización de producto [15] adopta un enfoque diferente: comprime vectores en códigos cortos y ofrece la mayor aceleración de ensamblaje (3,6x) en comparación con FAISS [7]. Sin embargo, este método tiene un alto costo: el tiempo de devolución de llamada puede reducirse hasta en un 85, y no puede utilizarse si se garantiza la precisión.
+
+En términos de infraestructura, FAISS \cite{ref7} y Milvus \cite{ref8} han establecido el estándar para implementar métricas HNSW en entornos de producción. Milvus admite coseno, producto escalar y normalización $L_2$ en incrustaciones densas y mixtas y constituye la base de muchas canalizaciones RAG de última generación \cite{ref10}. En esta plataforma, Elkiran y Rasheed \cite{ref11} probaron tres métricas utilizando incrustaciones de OpenAI (3072 dimensiones) y el corpus SQuAD \cite{ref12}: el coseno y el producto escalar lograron $\text{R}@10 = 0{,}909$--$0{,}925$ y $\text{MRR} = 0{,}781$--$0{,}793$, respectivamente, mientras que $\text{LRR}$ no normalizado $= 0{,}116$. Como se indica en la teoría clásica de recuperación de información \cite{ref16}, el umbral de similitud determina el equilibrio entre precisión y exhaustividad, y la normalización es crucial cuando se utiliza la normalización $L_2$.
+
+Una revisión de la literatura revela una brecha significativa. Hasta la fecha, ningún estudio ha medido HNSW para resúmenes científicos densos y distribuidos irregularmente. Además, no existe un marco de referencia que permita la comparación de modelos de integración científica como SciBERT o E5-large, y la evaluación simultánea del rendimiento de $M$ y \texttt{ef\_construction} frente a \text{Recall}@$K$ y $MRR$. La investigación sobre RAGs todavía se limita al dominio de preguntas y respuestas utilizando conjuntos de datos generales debido a la falta de conocimiento sobre las propiedades semánticas de los textos académicos \cite{ref11,ref12}. Esta brecha motivó nuestro estudio.
 
 % -------------------------------------------------------
 \section{Metodología}
@@ -147,60 +106,25 @@ académico. Ese vacío es el que motiva este trabajo.
 \subsection{Conjunto de datos}
 % -------------------------------------------------------
 
-Trabajamos sobre \textit{arxiv-abstracts-2021}, una colección abierta (licencia
-CC0) que reúne cerca de dos millones de resúmenes depositados en ArXiv
-\cite{ref17}. El corpus completo desborda cualquier presupuesto experimental
-razonable, así que recortamos. De esos dos millones extrajimos 50\,000 abstracts
-mediante muestreo estratificado por categoría. ¿Por qué estratificar en lugar de
-tomar una muestra al azar? Porque ArXiv no reparte sus documentos de manera
-uniforme: la física aporta muchísimo más que, pongamos, la biología cuantitativa.
-Un muestreo aleatorio simple habría inundado el conjunto con un puñado de áreas
-dominantes y habría borrado justo lo que queremos estudiar: la heterogeneidad
-temática del lenguaje científico. La estratificación conserva esa mezcla de física,
-matemáticas, ciencias de la computación y biología en proporciones comparables a
-las del corpus original.
+Trabajamos con arXiv-abstracts-2021 (licencia CC0), una colección de acceso abierto de aproximadamente dos millones de resúmenes subidos a arXiv \cite{ref17}. Dado que el conjunto de datos era demasiado grande para un presupuesto experimental razonable, redujimos su tamaño. De estos dos millones de resúmenes, extrajimos $50\,000$ mediante muestreo estratificado por categoría. ¿Por qué elegimos el muestreo estratificado en lugar del muestreo aleatorio? Porque arXiv no distribuye sus documentos de manera uniforme: por ejemplo, la física está mucho más representada que la biología cuantitativa. Un muestreo aleatorio simple concentraría los documentos en unas pocas áreas dominantes y eliminaría precisamente lo que queríamos investigar, a saber, la heterogeneidad temática en el lenguaje científico. El muestreo aleatorio preserva esta diversidad en física, matemáticas, informática y biología en proporciones similares a las del conjunto de datos original.
 
-De cada registro retuvimos tres campos: el identificador, el texto del abstract y
-las categorías. El resto de los metadatos ---autores, DOI, referencias a
-revistas--- no aporta nada a una tarea de recuperación semántica, de modo que los
-descartamos.
+Registramos tres campos de cada registro: \texttt{descriptor}, \texttt{resumen} y \texttt{categoría}. Se excluyeron otros metadatos autor, DOI, referencias de revistas ya que no contribuían a las búsquedas semánticas.
 
 % -------------------------------------------------------
 \subsection{Modelos de embedding}
 % -------------------------------------------------------
 
-Comparamos dos representaciones que encarnan filosofías opuestas. SciBERT
-\cite{ref18} genera vectores de 768 dimensiones y nació entrenado sobre literatura
-científica, así que llega conociendo de antemano el vocabulario, las abreviaturas
-y los giros que pueblan un abstract técnico. E5-large \cite{ref19}, en cambio,
-produce vectores de 1024 dimensiones y proviene del mundo del propósito general;
-su fuerza no está en el dominio sino en la escala y en un entrenamiento contrastivo
-orientado a recuperación.
+Comparamos dos representaciones contrastantes de las ideas. SciBERT \cite{ref18} produce vectores de 768 dimensiones y se entrena naturalmente con literatura científica; por lo tanto, ya conoce el vocabulario, las abreviaturas y las expresiones propias de los resúmenes técnicos. En cambio, E5-large \cite{ref19} produce vectores de 1024 dimensiones y proviene de un campo más amplio; su ventaja no reside en su área de especialización, sino en su tamaño y relativa facilidad de memorización durante el entrenamiento.
 
-La pregunta detrás de esta elección es directa: ¿pesa más conocer el terreno o
-tener más músculo? Un modelo especializado debería capturar matices que a uno
-generalista se le escapan. Pero E5-large llega con más parámetros, más dimensiones
-y un ajuste pensado para tareas de búsqueda. Enfrentarlos nos dice cuál de las dos
-apuestas rinde mejor sobre abstracts reales.
+La pregunta de fondo es qué pesa más: el dominio del vocabulario científico o el entrenamiento específico para recuperación. SciBERT conoce a fondo la jerga técnica, pero no fue entrenado para emparejar consultas con documentos; E5-large sí lo fue, aunque provenga de un dominio general. Cuál de las dos propiedades resulta decisiva es una cuestión empírica, y este trabajo la responde.
 
 % -------------------------------------------------------
 \subsection{Diseño experimental}
 % -------------------------------------------------------
 
-Indexamos exclusivamente con FAISS \cite{ref7}. Descartamos ChromaDB por una razón
-pragmática: sumaba una variable más sin aportar señal experimental, mientras que
-FAISS ofrece acceso de bajo nivel a los parámetros del grafo HNSW, que es
-precisamente lo que queremos manipular. Menos piezas móviles, conclusiones más
-limpias.
+Utilizamos FAISS \cite{ref7} únicamente para la indexación. Abandonamos ChromaDB por razones prácticas: añade una variable adicional pero no proporciona una señal experimental, mientras que \texttt{FAISS} ofrece acceso de bajo nivel a los parámetros del gráfico HNSW, justo lo que necesitábamos. Menos distracciones, resultados más claros.
 
-Movimos tres perillas. El parámetro $M$, que fija el número de conexiones por nodo,
-toma los valores $\{8, 16, 32\}$. El parámetro \textit{ef\_construction}, que
-controla la amplitud de la búsqueda durante el armado del índice, recorre
-$\{100, 200, 400\}$. Y la métrica de similitud alterna entre coseno y distancia
-euclídea (L2). La amplitud de búsqueda en consulta (\textit{ef\_search}) se fijó en
-50 para todas las pruebas. Cruzar los dos modelos de embedding con estos tres ejes
-produce 36 configuraciones distintas, cada una indexada y evaluada por separado
-(Tabla~\ref{tab:factores}).
+Manipulamos tres factores. El parámetro $M$ define el número de conexiones por nodo y puede tomar valores del conjunto $\{8, 16, 32\}$. El parámetro \texttt{ef\_construction} controla el ancho de búsqueda durante la indexación y toma valores del conjunto $\{100, 200, 400\}$. La métrica de similitud varió entre la distancia coseno y la distancia euclidiana ($L_2$). La profundidad de búsqueda de la consulta (\texttt{ef\_search}) se estableció en 50 en todas las pruebas. La intersección de los dos modelos de distribución a lo largo de estos tres ejes dio como resultado 36 configuraciones. Cada configuración se indexó y evaluó por separado (Tabla 1).
 
 \begin{table}[h]
 \caption{Factores del diseño experimental y sus niveles. La combinación completa
@@ -221,37 +145,25 @@ Métrica de similitud & Coseno, L2 & 2 \\
 \end{table}
 
 % -------------------------------------------------------
-\subsection{Construcción del ground truth}
+\subsection{Construcción del \textit{ground truth}}
 % -------------------------------------------------------
 
 Para saber si HNSW acierta necesitamos una verdad contra la cual contrastar, y esa
 verdad es la búsqueda exacta. De los 50\,000 abstracts apartamos 1\,000 como
-consultas ---también por muestreo estratificado--- y dejamos los 49\,000 restantes
-como corpus indexado. Sobre ese corpus construimos un índice plano de fuerza bruta
----\texttt{IndexFlatL2} cuando la métrica es euclídea, \texttt{IndexFlatIP} cuando
-es coseno--- que recorre todo el espacio y devuelve los vecinos genuinamente más
-cercanos a cada consulta. No hay aproximación: es el resultado correcto por
-definición, aunque costoso.
-
-Cada consulta se lanza dos veces. Una contra el índice exacto, que entrega los $K$
-vecinos verdaderos; otra contra el índice HNSW, que entrega su versión aproximada.
-Comparar ambas listas revela cuánto recall sacrifica HNSW a cambio de su velocidad.
+consultas también por muestreo estratificado y dejamos los 49\,000 restantes
+como corpus indexado. En este conjunto de datos, construimos un índice plano que recorre todo el espacio y devuelve los vecinos más cercanos reales para cada consulta: \texttt{IndexFlatL2} cuando la métrica es la distancia euclidiana e \texttt{IndexFlatIP} cuando la métrica es la distancia coseno. Este enfoque no es intrínsecamente defectuoso: produce resultados precisos por definición, pero es costoso. Cada consulta se ejecuta dos veces. La primera ejecución aplica el índice exacto y devuelve $K$ vecinos reales; la segunda ejecución aplica el índice HNSW y devuelve vecinos aproximados. La comparación de estas dos listas muestra cuánto sacrifica HNSW la precisión en aras de la velocidad.
 
 % -------------------------------------------------------
 \subsection{Métricas de evaluación}
 % -------------------------------------------------------
 
-Medimos tres cosas. La primera es el Recall@K, la fracción de los $K$ vecinos
-verdaderos que HNSW logra recuperar; lo calculamos para $K = 1, 5$ y $10$, de modo
-que observamos tanto el acierto en la primera posición como el comportamiento en
-listas más largas. La segunda es el MRR (\textit{Mean Reciprocal Rank}), que premia
-que el primer resultado relevante aparezca arriba y castiga que se hunda en la
-lista. La tercera es la latencia por consulta, en milisegundos, que captura el
-costo que el usuario percibe.
+Medimos tres métricas. La primera es $\text{Recall}@K$: el porcentaje de $K$ vecinos verdaderos que HNSW puede extraer. Calculamos tasas de éxito para $K \in \{1, 5, 10\}$ para monitorizar el rendimiento en listas más largas. La segunda métrica es el \textit{Mean Reciprocal Rank} (MRR), que prioriza el primer resultado relevante que aparece en la parte superior y penaliza los resultados de menor rango. La latencia por consulta en milisegundos representa el coste real experimentado por el usuario.
 
-Recall y MRR hablan de calidad; la latencia, de velocidad. El interés del estudio
-vive justo en la tensión entre ambas. Ninguna configuración gana en todo, y dibujar
-el mapa de esos compromisos es exactamente lo que perseguimos.
+Recall y MRR representan la calidad; la latencia representa la velocidad. La importancia de este estudio radica en el equilibrio entre estas dos métricas. Ninguna configuración es perfecta, y nuestro objetivo es identificar estas compensaciones.
+
+Para determinar si las diferencias observadas entre SciBERT y E5-large son estadísticamente significativas a la variabilidad entre consultas, aplicamos pruebas pareadas sobre el mismo conjunto de 1\,000 consultas. La prueba de McNemar en su versión binomial exacta sobre el acierto binario del $\text{Recall}@10$ y la prueba de Wilcoxon de rangos con signo sobre los valores por consulta de $\text{Recall}@10$ y del rango recíproco. Reportamos el valor $p$ bilateral y el tamaño de efecto rank-biserial, con un nivel de significancia $\alpha = 0{,}05$.
+
+Como la evaluación anterior emplea abstracts completos como consultas ---lo que mide la fidelidad del índice pero no el uso real del sistema, donde el usuario formula una frase corta en lenguaje natural---, la complementamos con una evaluación de \textit{known-item}. Sobre una muestra reproducible de 1\,000 documentos del corpus usamos su título, una frase de una decena de palabras, como consulta; el título no forma parte del índice y el documento relevante es unívoco: el abstract del que proviene. Los títulos se vectorizan con el mismo procedimiento que el corpus y se recuperan con la mejor configuración, midiendo el $\text{Recall}@K$ y el MRR de recuperar el abstract de origen.
 
 % -------------------------------------------------------
 \section{Implementación del Sistema}
@@ -265,7 +177,7 @@ mediante HNSW y evaluación--- que operan sobre una infraestructura de cómputo
 distribuida en dos entornos de ejecución. La Fig.~\ref{fig:diagrama} ilustra esta
 organización.
 
-\begin{figure}[h]
+\begin{figure}[H]
 \centering
 \includegraphics[width=0.85\textwidth]{Images/diagrama_bloques.png}
 \caption{Diagrama de bloques del sistema: ingesta y muestreo del corpus,
@@ -278,103 +190,238 @@ de evaluación de métricas.}
 \subsection{Visión general de la arquitectura}
 % -------------------------------------------------------
 
-La carga computacional se distribuye en función de sus requisitos de hardware. La
-etapa de vectorización, intensiva en cómputo y dependiente de aceleración por GPU,
-se ejecuta en Google Colab sobre una unidad NVIDIA T4. Las etapas de indexación y
-evaluación se ejecutan localmente sobre CPU, entorno en el que la biblioteca FAISS
-\cite{ref7} ofrece un rendimiento adecuado. La interfaz entre ambos entornos son
-los vectores de embedding serializados: una vez generadas las representaciones, el
-resto del procesamiento prescinde de la GPU.
-
-Esta separación responde a un doble criterio. En primer lugar, reduce el costo
-computacional al reservar el uso de GPU exclusivamente para la fase que lo requiere.
-En segundo lugar, favorece la reproducibilidad del experimento: los procesos
-estocásticos ---el muestreo estratificado y la selección del conjunto de
-consultas--- quedan determinados por una semilla aleatoria compartida, de modo que
-cada ejecución produce resultados equivalentes.
+La carga computacional se distribuye según los requisitos de hardware. El paso de vectorización, que consume muchos recursos y depende de la aceleración por GPU, se realiza en un bloque NVIDIA T4 en Google Colab. Los pasos de indexación y estimación se realizan localmente en la CPU; en este entorno, la biblioteca \texttt{FAISS} \cite{ref7} proporciona un rendimiento suficiente. La interfaz entre los dos entornos consiste en vectores de enlace serializados: una vez generadas las imágenes, el resto del procesamiento ya no requiere la GPU. Esta separación tiene dos propósitos. Primero, reduce el costo computacional al limitar el consumo de GPU solo a las fases que lo requieren. Segundo, mejora la reproducibilidad del experimento: los procesos estocásticos (muestreo estratificado y selección del conjunto de búsqueda) se basan en una semilla aleatoria común, lo que garantiza resultados similares para cada ejecución.
 
 % -------------------------------------------------------
 \subsection{Flujo de datos}
 % -------------------------------------------------------
 
-El procesamiento sigue una secuencia de etapas claramente delimitadas:
+El proceso incluyó los siguientes pasos:
 
 \begin{enumerate}
-    \item \textbf{Ingesta y muestreo.} Se descarga el conjunto
-    \textit{arxiv-abstracts-2021} \cite{ref17} y se aplica el muestreo estratificado
-    por categoría hasta obtener los 50\,000 abstracts, de los cuales se reservan
-    1\,000 como conjunto de consultas.
-    \item \textbf{Vectorización.} Cada abstract se transforma en un vector denso
-    mediante los modelos SciBERT \cite{ref18} y E5-large \cite{ref19}.
-    \item \textbf{Cálculo del \textit{ground truth}.} Para cada par (modelo,
-    métrica) se determinan los vecinos exactos de cada consulta mediante búsqueda por
-    fuerza bruta.
-    \item \textbf{Indexación y consulta.} Se construyen los 36 índices HNSW y se
-    resuelven sobre cada uno las 1\,000 consultas.
-    \item \textbf{Evaluación y exportación.} Se calculan Recall@K, MRR y latencia, y
-    los resultados se consolidan en tablas.
+    \item \textbf{Importación y prueba de datos.} Se descargó el conjunto de datos arxiv-abstracts-2021 \cite{ref17} y se agrupó para obtener $50\,000$ mapas; $1\,000$ de estos se utilizaron como conjuntos de búsqueda.
+    
+    \item \textbf{Vectorización.} Cada mapa se convirtió en un vector denso utilizando los modelos SciBERT \cite{ref18} y E5-large \cite{ref19}.
+    
+    \item \textbf{Cálculo de la precisión.} Para cada par (modelo, métrica), se realizó una búsqueda exhaustiva para determinar la precisión del vecindario para cada consulta.
+    
+    \item \textbf{Cálculo y búsqueda.} Se generaron 36 índices HNSW y se analizaron $1\,000$ consultas para cada métrica.
+    
+    \item \textbf{Evaluación e implementación.} Se calcularon $\text{Recall}@K$, la tasa media de recuperación (MRR) y la latencia, y se presentaron los resultados.
 \end{enumerate}
 
 % -------------------------------------------------------
 \subsection{Componentes y desarrollo}
 % -------------------------------------------------------
 
-El \textit{pipeline} se estructura en módulos de responsabilidad única, coordinados
-por un archivo de configuración central que concentra las rutas, los hiperparámetros
-y la semilla aleatoria. La ingesta del corpus se realiza con la biblioteca
-\texttt{datasets}, mientras que la vectorización emplea \texttt{sentence-transformers}.
-Dado que SciBERT es un modelo de tipo BERT que no incorpora una capa de agregación
-propia, se añade una operación de \textit{pooling} de media para obtener un único
-vector por documento \cite{ref3}; el modelo E5-large, por su parte, requiere los
-prefijos \texttt{query:} y \texttt{passage:} establecidos durante su preentrenamiento.
+El sistema realiza tres tareas interdependientes: leer el resumen, convertirlo en vectores y, posteriormente, construir y consultar el índice a partir de estos vectores.
 
-La indexación y la recuperación se sustentan íntegramente en FAISS. El
-\textit{ground truth} se obtiene con índices exactos (\texttt{IndexFlatL2} para
-distancia euclídea e \texttt{IndexFlatIP} para producto interno), en tanto que las
-36 configuraciones se construyen con \texttt{IndexHNSWFlat}, fijando el parámetro
-\textit{ef\_construction} antes de la inserción y \textit{ef\_search} antes de la
-consulta. La similitud coseno se implementa normalizando los vectores y aplicando
-producto interno, dado que FAISS no la provee de forma nativa. Finalmente, el módulo
-de evaluación consolida las métricas en un archivo CSV y las exporta de manera
-automática a tablas en formato LaTeX, lo que elimina la transcripción manual de los
-resultados.
+Cada paso se basa en una biblioteca de código abierto de eficacia probada, y todos los elementos se integran en una configuración que incluye rutas, hiperparámetros y un valor aleatorio, lo que garantiza la reproducibilidad de los experimentos.
+
+Cabe destacar que el sistema construye los vectores para cada modelo. SciBERT genera una representación para cada palabra del resumen, lo que significa que estos resultados se promedian en un vector (una operación de concatenación \cite{ref3}). E5-large funciona de manera diferente: requiere que cada texto esté etiquetado; las consultas etiquetadas como \texttt{"query"} y los documentos etiquetados como \texttt{"passed"} constituyen una regla definida durante el entrenamiento que debe seguirse para evitar cualquier degradación de la calidad.
+
+El núcleo de este sistema, indexación y búsqueda se basa completamente en la biblioteca \texttt{FAISS}, diseñada para búsquedas rápidas de vecinos en millones de vectores. El valor real se calcula mediante una búsqueda exacta que compara cada consulta con el conjunto de datos completo. Se crea un índice tentativo 36 utilizando HNSW, que activa la función \texttt{ef\_construction} durante la configuración y la función \texttt{ef\_search} durante la ejecución de la consulta. Cabe destacar que \texttt{FAISS} no considera la similitud del coseno por defecto; en su lugar, esta se realiza normalizando los vectores y calculando productos escalares, en cuyo caso ambos son matemáticamente equivalentes. Finalmente, cada ejecución exporta los valores a un archivo \texttt{CSV} a partir del cual se genera automáticamente una lista de elementos sin necesidad de introducirlos manualmente.
+
+% -------------------------------------------------------
+\subsection{Demostración interactiva}
+% -------------------------------------------------------
+
+Esta aplicación implementa la configuración experimental ganadora (SciBERT, transformada coseno, $M=32$, \texttt{ef\_construction} $= 400$). La aplicación reutiliza la configuración generada, reconstruye el índice HNSW una sola vez y almacena en memoria la coincidencia entre cada vector y el texto del resumen. Los usuarios introducen consultas en lenguaje natural, que SciBERT vectoriza e indexa. La interfaz devuelve la similitud, la clasificación y el resumen más relevante (si está disponible), así como enlaces a arXiv y DOI. El control deslizante del parámetro \texttt{ef\_search} permite ajustar en tiempo real el equilibrio entre el tamaño de la búsqueda y la latencia; este es el objetivo principal del estudio. La flecha en la Figura~\ref{fig:demo} muestra un ejemplo de la interfaz de análisis de consultas. Cabe advertir que, al vectorizar las consultas con SciBERT, la demo hereda la limitación descrita en la Sección~\ref{sec:consultas-naturales} ante consultas cortas en lenguaje natural; para un despliegue orientado a usuarios sería preferible E5-large.
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.95\textwidth]{Images/demo_streamlit.png}
+\caption{Demostración interactiva de la búsqueda semántica: la consulta del usuario
+se vectoriza con SciBERT y se recuperan los abstracts más cercanos sobre el índice
+HNSW, con la latencia medida en tiempo real.}
+\label{fig:demo}
+\end{figure}
 
 % -------------------------------------------------------
 \section{Resultados}
+\label{sec:resultados}
 % -------------------------------------------------------
 
-% TODO: Presentar métricas Recall@K, MRR y latencia obtenidas
+Analicemos primero los resultados más impresionantes: las 36 configuraciones fueron exitosas. Incluso la configuración con peor rendimiento alcanzó una utilización de memoria del $10\,\%$ ($0{,}946$), y todas las configuraciones tuvieron tiempos de respuesta inferiores a $1\text{~ms}$ ($0{,}09$--$0{,}70\text{~ms}$ por solicitud). Este intervalo de tiempo es demasiado corto para analizarlo, ya que en condiciones normales las diferencias son mínimas. Sin embargo, los tres factores que ajustamos en este intervalo tuvieron un impacto significativo. La Tabla~\ref{tab:resultados} muestra la configuración óptima para cada combinación de modelo y métrica.
 
 \begin{table}[h]
-\caption{Recall@K, MRR y latencia según modelo de embedding y métrica de similitud
-sobre FAISS-HNSW (mejor configuración de $M$ y \textit{ef\_construction}).}
+\caption{Recall@K, MRR y latencia de la mejor configuración por modelo de embedding
+y métrica de similitud sobre FAISS-HNSW (49\,000 documentos, 1\,000 consultas,
+\textit{ef\_search}$=50$). La mejor configuración se selecciona por Recall@10.}
 \label{tab:resultados}
 \centering
-\begin{tabular}{|l|l|c|c|c|c|c|}
+\begin{tabular}{|l|l|c|c|c|c|c|c|c|}
 \hline
-\textbf{Modelo} & \textbf{Métrica} & \textbf{R@1} & \textbf{R@5} & \textbf{R@10}
-& \textbf{MRR} & \textbf{Lat. (ms)} \\
+\textbf{Modelo} & \textbf{Métrica} & \textbf{$M$} & \textbf{\textit{ef\_c}} &
+\textbf{R@1} & \textbf{R@5} & \textbf{R@10} & \textbf{MRR} & \textbf{Lat. (ms)} \\
 \hline
-SciBERT   & Coseno & -- & -- & -- & -- & -- \\
-SciBERT   & L2     & -- & -- & -- & -- & -- \\
-E5-large  & Coseno & -- & -- & -- & -- & -- \\
-E5-large  & L2     & -- & -- & -- & -- & -- \\
+SciBERT   & Coseno & 32 & 400 & 1,000 & 0,999 & \textbf{0,998} & 1,000 & 0,33 \\
+SciBERT   & L2     & 32 & 400 & 1,000 & 0,999 & 0,998 & 1,000 & 0,25 \\
+E5-large  & Coseno & 32 & 400 & 0,999 & 0,997 & 0,995 & 0,999 & 0,40 \\
+E5-large  & L2     & 32 & 200 & 1,000 & 0,998 & 0,995 & 1,000 & 0,50 \\
 \hline
 \end{tabular}
 \end{table}
+
+% \input{code/results/tabla_completa.tex} % Tabla completa de 36 configuraciones (comentada por ahora)
+
+De estos tres parámetros, el efecto de $M$ es el más pronunciado. Cuando $M = 8$, $\text{Recall}@10$ se mantiene entre $0{,}95$ y $0{,}96$; cuando $M$ llega a 16, $\text{Recall}@10$ supera ligeramente $0{,}98$; y cuando $M$ llega a 32, $\text{Recall}@10$ se estabiliza alrededor de $0{,}99$. Se observa un aumento significativo entre 8 y 16: más allá de 16, el índice tiende hacia el límite superior y, por lo tanto, $\text{Recall}@10$ aumenta ligeramente. El MRR confirma esto desde otro ángulo: cuando $M \ge 16$, el MRR se estabiliza entre $0{,}997$ y $1{,}000$, lo que significa que el primer vecino coincidente está casi siempre en la primera posición. 
+
+La situación cambia durante la construcción del elemento de respuesta, lo cual es algo decepcionante. Aumentar este parámetro de 100 a 400 mejora la tasa de recuperación de 10 puntos ($\text{Recall}@10$) en solo unos pocos puntos porcentuales (de $0{,}993$ a $0{,}998$, e incluso más para el modelo SciBERT usando la transformada coseno y $M=32$), pero casi duplica el tiempo de indexación: de aproximadamente $15\text{~segundos}$ a $44\text{~segundos}$. El objetivo no es lograr la máxima precisión, sino mejorarla. Si se requiere una reconstrucción continua del índice, es más eficiente reducir este parámetro que aumentarlo. 
+
+Además, el impacto de la métrica de similitud es casi despreciable. Después de la normalización vectorial, el rendimiento de la transformada coseno y la distancia $L_2$ es casi idéntico: la diferencia en la tasa de recuperación de 10 puntos es como máximo dos o tres milésimas del ruido. La normalización es necesaria para equilibrar el rendimiento de los dos métodos; como han demostrado otros estudios, el modelado de distancia euclidiana se vuelve ineficiente sin normalización. Para este conjunto de datos, elegir un método sobre otro no tiene un efecto significativo.
+
+Queda la comparación entre modelos, que tiene su miga. SciBERT, el especializado, le
+gana a E5-large por un margen pequeño pero consistente 0,998 frente a 0,995 de
+Recall@10 y encima lo hace más rápido: 0,33\,ms por consulta contra 0,40, además
+de índices que se arman antes. No era el desenlace evidente. SciBERT trabaja con
+vectores de 768 dimensiones y E5-large con 1024; tener menos dimensiones abarata cada
+comparación de distancia, y sobre estos abstracts esa economía no costó nada en
+la fidelidad del índice. El que sabía del dominio resultó, encima, el más ligero.
+
+Para descartar que ese margen de $0{,}003$ en $\text{Recall}@10$ pueda causar la variabilidad entre consultas, las comparamos a pruebas estadísticas pareadas. La prueba de McNemar arroja 47 consultas a favor de SciBERT frente a 16 a favor de E5-large entre los pares discordantes. La prueba de Wilcoxon de
+rangos sobre el $\text{Recall}@10$ por consulta lo confirma. Por lo tanto, la ventaja de SciBERT en $\text{Recall}@10$ es estadísticamente significativa y no un
+efecto del azar. Por otro lado, la diferencia en MRR de $1{,}000$ frente a $0{,}999$, no alcanza significanca. Ambos modelos sitúan el primer
+vecino verdadero en la primera posición casi siempre, así que en MRR son
+estadísticamente equivalentes. En síntesis, SciBERT aventaja a E5-large de forma
+significativa en la fidelidad del índice ($\text{Recall}@10$ abstract-a-abstract), mientras que en MRR son equivalentes. No obstante, como se muestra en la Sección~\ref{sec:consultas-naturales}, esta ventaja en fidelidad no se traduce en una mejor recuperación cuando la consulta es una frase corta en lenguaje natural.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.72\textwidth]{Images/fig_recall_vs_m.png}
+\caption{Recall@10 en función de $M$ (con \textit{ef\_construction}$=400$) para cada
+combinación de modelo y métrica. El salto decisivo ocurre al pasar de $M=8$ a $M=16$;
+de 16 a 32 la mejora se aplana y SciBERT se mantiene por encima de E5-large.}
+\label{fig:recallm}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.72\textwidth]{Images/fig_recall_latency.png}
+\caption{Compromiso entre Recall@10 y latencia por consulta para las 36
+configuraciones. SciBERT (azul) ocupa la región de mayor exactitud y menor latencia,
+mientras que E5-large (rojo) se desplaza hacia latencias mayores.}
+\label{fig:latencia}
+\end{figure}
+
+% -------------------------------------------------------
+\subsection{Sensibilidad de \textit{ef\_search}}
+% -------------------------------------------------------
+
+Los factores anteriores son los que determinan la construcción del índice; sin embargo, el equilibrio entre exactitud y latencia es controlado por \texttt{ef\_search}, que hasta ahora era 50. Este valor no es arbitrario, para ello se realizo un análisis de sensibilidad sobre la mejor configuración, la cual es SciBERT, coseno, $M=32$, \textit{ef\_construction}$=400$. La Tabla~\ref{tab:efsearch} y la Fig.~\ref{fig:efsearch}
+resumen el resultado.
+
+\begin{table}[H]
+\caption{Análisis de sensibilidad de \textit{ef\_search} sobre la mejor
+configuración mencionada anteriormente. El índice se construye una sola vez y solo varía \textit{ef\_search}}\label{tab:efsearch}
+\centering
+\begin{tabular}{|c|c|c|c|c|c|}
+\hline
+\textbf{\textit{ef\_search}} & \textbf{R@1} & \textbf{R@5} & \textbf{R@10} &
+\textbf{MRR} & \textbf{Lat. (ms)} \\
+\hline
+10  & 0,998 & 0,985 & 0,963 & 0,998 & 0,09 \\
+20  & 0,998 & 0,994 & 0,985 & 0,998 & 0,19 \\
+50  & 1,000 & 0,999 & \textbf{0,998} & 1,000 & 0,32 \\
+100 & 1,000 & 0,999 & 1,000 & 1,000 & 0,48 \\
+200 & 1,000 & 0,999 & 1,000 & 1,000 & 0,70 \\
+400 & 1,000 & 0,999 & 1,000 & 1,000 & 1,36 \\
+\hline
+\end{tabular}
+\end{table}
+
+La curva muestra un codo nítido cuando \texttt{ef\_search} es 50. Por debajo de ese punto, el $\text{Recall}@10$ cae hasta $0{,}963$ donde la amplitud de búsqueda
+apenas supera el valor de 10 y no llega a explorar los suficientes candidatos. Cuando es mayor que 100, el $\text{Recall}@10$ se encuentra saturado y lo único que aumenta es la latencia desde $0{,}32$ hasta $1{,}36\text{~ms}$. 
+Por lo tanto, 50 es el valor óptimo en relación
+exactitud y latencia; ya que, para esta configuración recupera la mayor cantidad de vecinos verdaderos a un menor coste de
+latencia.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.72\textwidth]{Images/fig_ef_search.png}
+\caption{Sensibilidad de \texttt{ef\_search} sobre la mejor configuración donde $\text{Recall}@10$ se satura cuando \texttt{ef\_search} es 50, mientras
+que la latencia sigue creciendo. El valor 50 empleado en el estudio se sitúa en el codo de la curva.}
+\label{fig:efsearch}
+\end{figure}
+
+% -------------------------------------------------------
+\subsection{Recuperación con consultas en lenguaje natural}
+\label{sec:consultas-naturales}
+% -------------------------------------------------------
+
+La evaluación anterior usa abstracts completos como consultas, la cual mide la fidelidad del índice pero esta no se utiliza en el sistema, donde el usuario
+introduce una frase corta en lenguaje natural. Para cubrir ese escenario
+diseñamos una evaluación de \textit{known-item}, donde tomamos una muestra
+de 1\,000 documentos del corpus y usamos su título como consulta. El título no está indexado, solo los abstracts, pero el documento relevante es unívoco, el abstract proviene de su título. Vectorizamos los títulos con el mismo método que el
+corpus y buscamos con la mejor configuración mencionada. La Tabla~\ref{tab:naturales} resume el resultado.
+
+\begin{table}[H]
+\caption{Recuperación \textit{known-item} título$\rightarrow$abstract (consulta
+corta en lenguaje natural) frente a la evaluación abstract$\rightarrow$abstract,
+por modelo, sobre la mejor configuración (coseno, $M=32$,
+\textit{ef\_construction}$=400$; 1\,000 consultas).}\label{tab:naturales}
+\centering
+\begin{tabular}{|l|l|c|c|c|c|}
+\hline
+\textbf{Escenario} & \textbf{Modelo} & \textbf{R@1} & \textbf{R@5} &
+\textbf{R@10} & \textbf{MRR} \\
+\hline
+Abstract$\rightarrow$abstract & SciBERT  & 1,000 & 0,999 & \textbf{0,998} & 1,000 \\
+Abstract$\rightarrow$abstract & E5-large & 0,999 & 0,997 & 0,995 & 0,999 \\
+\hline
+Título$\rightarrow$abstract   & SciBERT  & 0,074 & 0,152 & 0,194 & 0,107 \\
+Título$\rightarrow$abstract   & E5-large & 0,869 & 0,946 & \textbf{0,953} & 0,902 \\
+\hline
+\end{tabular}
+\end{table}
+
+El resultado invierte por completo la comparación entre modelos. En el escenario de uso, SciBERT se desploma a un $\text{Recall}@10$ de $0{,}194$, mientras que
+E5-large lo mantiene en $0{,}953$. La causa es que SciBERT
+es un modelo BERT sin entrenamiento de recuperación, de modo que sitúa cada título
+a una similitud media de solo $0{,}733$ de su propio abstract, lo cual está por debajo de la
+de otros documentos, mientras que E5-large, es entrenado con pares para el emparejamiento asimétrico consulta a documento,
+lo cual lo sitúa a $0{,}878$ y mayormente en la primera posición. La superioridad de
+SciBERT observada antes se limita, por la fidelidad del índice sobre su
+propio espacio vectorial y no se traslada a la calidad de recuperación.Cuando la consulta es una frase corta real, el modelo a desplegar es E5-large. Esto nos evidencia que la fidelidad al índice exacto y la
+utilidad de recuperación son ejes distintos, por lo que la elección del modelo debe basarse en su uso.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.72\textwidth]{Images/fig_natural_vs_fidelity.png}
+\caption{Recall@10 de SciBERT y E5-large en los dos escenarios. En
+abstract$\rightarrow$abstract (fidelidad del índice) ambos rozan $1{,}0$ y
+SciBERT aventaja ligeramente; en título$\rightarrow$abstract (consulta corta
+real) SciBERT cae a $0{,}194$ mientras E5-large se mantiene en $0{,}953$.}
+\label{fig:naturales}
+\end{figure}
 
 % -------------------------------------------------------
 \section{Conclusiones}
 % -------------------------------------------------------
 
-% TODO: Completar con conclusiones finales tras ejecutar los experimentos.
+Aplicamos el algoritmo HNSW a un área relativamente inexplorada: los artículos científicos, ricos en jerga técnica y con una distribución desigual de temas.
+
+Lo probamos técnicamente: utilizando dos modelos conocidos que representan puntos de vista opuestos, 36 configuraciones y un análisis de probabilidad por fuerza bruta, los resultados fueron claros. HNSW es eficiente, lo cual es crucial. Incluso la peor configuración encuentra más del $94\,\%$ de los resultados de búsqueda correctos en menos de un milisegundo. El algoritmo está bien descrito en la literatura científica.
+
+De los numerosos parámetros, $M$ es el más importante, ya que determina el equilibrio adecuado entre precisión y coste. El parámetro \texttt{ef\_construction} es apenas suficiente, pero ofrece beneficios significativos durante la fase de configuración. Las dimensiones vectoriales normalizadas arrojaron resultados similares. El modelo específico (SciBERT) fue más rápido y más fiel a la búsqueda exacta, pero esa ventaja no se sostiene en el uso real: ante consultas cortas en lenguaje natural, el modelo general orientado a recuperación (E5-large) recupera el documento correcto mucho mejor. La elección del modelo depende, por tanto, del escenario de uso. Todo esto proporciona una guía práctica para quienes deseen implementar algoritmos similares.
+
+Recomendación de entorno (Heurística): Elija un valor medio o alto para $M$, configure \texttt{ef\_construction} en un nivel medio si no requiere una precisión extrema y, para consultas en lenguaje natural, prefiera un modelo entrenado para recuperación (como E5-large) antes que uno meramente específico del dominio. El ejemplo adjunto ilustra este punto:
+
+Esta misma configuración permite crear una herramienta de búsqueda que proporciona respuestas instantáneas de principio a fin sin necesidad de configuración adicional.
 
 % -------------------------------------------------------
 \section{Discusión}
 % -------------------------------------------------------
 
-% TODO: Análisis crítico de resultados, comparación con trabajos relacionados y
-% líneas de trabajo futuro.
+Es importante no dejarse deslumbrar por las cifras. Una puntuación de $0{,}998$ en $\text{Recall}@10$ parece buena, pero la clave está en comprender qué mide realmente: la precisión de HNSW al encontrar coincidencias exactas entre consultas dentro del mismo espacio vectorial. No mide la satisfacción del usuario con los resultados; ambos conceptos pueden confundirse fácilmente. El índice responde a la pregunta: «¿Puedo obtener los mismos resultados más rápido que con una búsqueda exhaustiva?». De hecho, la respuesta es casi perfecta. El modelo que convierte el texto en vectores es el que realmente determina la percepción de relevancia del usuario. Nuestra evaluación con consultas en lenguaje natural (Sección~\ref{sec:consultas-naturales}) lo confirma de forma empírica: manteniendo idéntica la estructura del índice, sustituir SciBERT por E5-large eleva el $\text{Recall}@10$ de $0{,}19$ a $0{,}95$.
+
+Esta es una limitación de nuestro estudio. El índice HNSW, por sí solo, no puede compensar las limitaciones del modelo de embedding para capturar la relevancia semántica; de ahí que un modelo entrenado para recuperación como E5-large marque una diferencia tan grande frente a uno que no lo está. 
+
+El corpus está en inglés, y nuestro hallazgo con consultas naturales apunta en la misma dirección: las limitaciones de relevancia provienen del modelo de embedding, no del índice. Además, no realizamos una evaluación a gran escala: $49\,000$ documentos son claramente insuficientes para comprender completamente el problema. La ventaja de HNSW sobre la búsqueda exacta podría aumentar drásticamente con el tamaño del conjunto de texto, pero esto aún no se ha confirmado experimentalmente en este trabajo. 
+
+Asimismo, aunque analizamos la sensibilidad de \texttt{ef\_search} sobre la configuración  óptima que se menciona en Sección~\ref{sec:resultados}, donde se confirma que el valor 50 se sitúa en el codo de la relación exactitud y latencia; sin embargo, no se exploró su interacción cruzada completa con $M$ y \texttt{ef\_construction} a lo largo de las 36 configuraciones; ese barrido tridimensional queda como trabajo futuro. Compartimos la opinión mostrada en estudios previos, que los métodos basados en grafos superan a otros enfoques en escenarios de alta dimensionalidad \cite{ref4,ref5} , también que la métrica de distancia se vuelve irrelevante después de la normalización vectorial. Aún no hay trabajos que hayan definido estas compensaciones en el contexto de los resúmenes científicos. Por lo que nuestra contribución es innovadora porque comparamos directamente el embedding específico del dominio y el generalista, y mostramos que su orden se invierte según se mida la fidelidad del índice o la recuperación ante consultas reales.
+
+Estas limitaciones también abren nuevas vías para futuras investigaciones. Podemos observar el rendimiento de la indexación bajo una carga pesada aumentando el tamaño del conjunto de datos a cientos de miles o incluso millones yde documentos. También consideramos imperativo evaluar modelos multilingües o específicos de la materia para abordar las restricciones de relevancia que HNSW, por su naturaleza puramente estructural, no puede resolver por sí mismo. Finalmente, planeamos analizar en detalle el comportamiento dinámico de \texttt{ef\_search} antes de establecer la relación analítica definitiva entre la latencia de ejecución de la consulta y la precisión.
 
 % -------------------------------------------------------
 % Referencias — ordenadas por orden de primera aparición en el texto
