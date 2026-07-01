@@ -396,6 +396,62 @@ real) SciBERT cae a $0{,}194$ mientras E5-large se mantiene en $0{,}953$.}
 \end{figure}
 
 % -------------------------------------------------------
+\subsection{Escalabilidad del índice}
+\label{sec:escalabilidad}
+% -------------------------------------------------------
+
+El experimento principal usa 49\,000 documentos, un tamaño en el que la ventaja
+de HNSW sobre la búsqueda exacta ---cuya complejidad es $O(N \cdot d)$ frente a
+$O(\log N)$--- podría no manifestarse. Para comprobarlo medimos la latencia por
+consulta de ambos índices sobre subconjuntos anidados y reproducibles del corpus,
+desde $5\,000$ hasta $100\,000$ vectores (SciBERT, coseno, $M=32$,
+\textit{ef\_construction}$=400$, \textit{ef\_search}$=50$). La
+Tabla~\ref{tab:escalabilidad} y la Fig.~\ref{fig:escalabilidad} recogen el
+resultado.
+
+\begin{table}[H]
+\caption{Latencia por consulta de la búsqueda exacta (\texttt{IndexFlatIP}) y de
+HNSW según el tamaño del corpus, con el Recall@10 de HNSW frente a la búsqueda
+exacta al mismo tamaño (1\,000 consultas, SciBERT, coseno).}\label{tab:escalabilidad}
+\centering
+\begin{tabular}{|c|c|c|c|c|}
+\hline
+\textbf{$N$} & \textbf{Exacta (ms)} & \textbf{HNSW (ms)} &
+\textbf{Speedup} & \textbf{R@10} \\
+\hline
+5\,000   & 0,027 & 0,037 & 0,7$\times$ & 0,999 \\
+10\,000  & 0,057 & 0,143 & 0,4$\times$ & 0,998 \\
+20\,000  & 0,177 & 0,178 & 1,0$\times$ & 0,995 \\
+35\,000  & 0,159 & 0,262 & 0,6$\times$ & 0,992 \\
+49\,000  & 0,251 & 0,286 & 0,9$\times$ & 0,990 \\
+75\,000  & 0,366 & 0,322 & 1,1$\times$ & 0,988 \\
+100\,000 & 0,505 & 0,368 & \textbf{1,4$\times$} & 0,987 \\
+\hline
+\end{tabular}
+\end{table}
+
+La búsqueda exacta escala de forma aproximadamente lineal (se multiplica por 18 al
+pasar de $5\,000$ a $100\,000$ vectores), mientras que HNSW lo hace de forma
+sublineal (se multiplica por 10). Estas pendientes distintas explican el punto de
+cruce en torno a $60\,000$ documentos: por debajo, la búsqueda exacta ---muy
+optimizada mediante BLAS en FAISS--- resulta igual de rápida o más, y solo a partir
+de ahí HNSW se impone, con una ventaja que se ensancha hasta $1{,}4\times$ en
+$100\,000$. Esto confirma de forma empírica la limitación que ya advertíamos: en el
+tamaño del estudio ($49\,000$) la búsqueda exacta es incluso ligeramente más rápida
+que HNSW, de modo que la ventaja de HNSW pertenece a corpus mayores. El Recall@10
+se mantiene por encima de $0{,}98$ en todo el rango, por lo que HNSW conserva su
+exactitud a medida que el corpus crece.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.72\textwidth]{Images/fig_scalability.png}
+\caption{Latencia por consulta frente al tamaño del corpus. La búsqueda exacta
+(rojo) crece de forma lineal y HNSW (azul) de forma sublineal; se cruzan cerca de
+$60\,000$ documentos y la ventaja de HNSW se ensancha a partir de ahí.}
+\label{fig:escalabilidad}
+\end{figure}
+
+% -------------------------------------------------------
 \section{Conclusiones}
 % -------------------------------------------------------
 
@@ -417,7 +473,7 @@ Es importante no dejarse deslumbrar por las cifras. Una puntuación de $0{,}998$
 
 Esta es una limitación de nuestro estudio. El índice HNSW, por sí solo, no puede compensar las limitaciones del modelo de embedding para capturar la relevancia semántica; de ahí que un modelo entrenado para recuperación como E5-large marque una diferencia tan grande frente a uno que no lo está. 
 
-El corpus está en inglés, y nuestro hallazgo con consultas naturales apunta en la misma dirección: las limitaciones de relevancia provienen del modelo de embedding, no del índice. Además, no realizamos una evaluación a gran escala: $49\,000$ documentos son claramente insuficientes para comprender completamente el problema. La ventaja de HNSW sobre la búsqueda exacta podría aumentar drásticamente con el tamaño del conjunto de texto, pero esto aún no se ha confirmado experimentalmente en este trabajo. 
+El corpus está en inglés, y nuestro hallazgo con consultas naturales apunta en la misma dirección: las limitaciones de relevancia provienen del modelo de embedding, no del índice. Además, el tamaño del corpus del experimento principal ($49\,000$) resulta modesto: nuestro análisis de escalabilidad (Sección~\ref{sec:escalabilidad}) muestra que a ese tamaño la búsqueda exacta es incluso ligeramente más rápida que HNSW, y que la ventaja de HNSW solo emerge más allá de unos $60\,000$ documentos, ensanchándose con el tamaño. Confirmar esa tendencia sobre corpus de millones de documentos ---donde la diferencia de complejidad ($O(N \cdot d)$ frente a $O(\log N)$) debería ser drástica--- queda como trabajo futuro.
 
 Asimismo, aunque analizamos la sensibilidad de \texttt{ef\_search} sobre la configuración  óptima que se menciona en Sección~\ref{sec:resultados}, donde se confirma que el valor 50 se sitúa en el codo de la relación exactitud y latencia; sin embargo, no se exploró su interacción cruzada completa con $M$ y \texttt{ef\_construction} a lo largo de las 36 configuraciones; ese barrido tridimensional queda como trabajo futuro. Compartimos la opinión mostrada en estudios previos, que los métodos basados en grafos superan a otros enfoques en escenarios de alta dimensionalidad \cite{ref4,ref5} , también que la métrica de distancia se vuelve irrelevante después de la normalización vectorial. Aún no hay trabajos que hayan definido estas compensaciones en el contexto de los resúmenes científicos. Por lo que nuestra contribución es innovadora porque comparamos directamente el embedding específico del dominio y el generalista, y mostramos que su orden se invierte según se mida la fidelidad del índice o la recuperación ante consultas reales.
 

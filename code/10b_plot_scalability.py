@@ -34,7 +34,7 @@ ax.set_title("Escalabilidad: latencia vs. tamaño del corpus", fontsize=10)
 
 # Anotación del speedup en el N máximo
 last = df.iloc[-1]
-ax.annotate(f"{last['speedup']:.0f}$\\times$ más rápido\\nque la exacta en N={int(last['N']):,}",
+ax.annotate(f"HNSW {last['speedup']:.1f}$\\times$ más rápido\nque la exacta en N={int(last['N']):,}",
             xy=(last["N"], last["hnsw_ms"]),
             xytext=(last["N"] * 0.55, max(df["exact_ms"]) * 0.5),
             fontsize=8, color="#1f77b4",
