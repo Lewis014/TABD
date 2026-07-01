@@ -1,0 +1,14 @@
+\begin{table}[h]
+\caption{Recall@K, MRR y latencia según modelo de embedding y métrica de similitud sobre FAISS-HNSW (mejor configuración de $M$ y \textit{ef\_construction}).}\label{tab:resultados}
+\centering
+\begin{tabular}{|l|l|c|c|c|c|c|}
+\hline
+\textbf{Modelo} & \textbf{Métrica} & \textbf{R@1} & \textbf{R@5} & \textbf{R@10} & \textbf{MRR} & \textbf{Lat. (ms)} \\
+\hline
+E5-large & Coseno & 0.999 & 0.997 & 0.995 & 0.999 & 0.398 \\
+E5-large & L2     & 1.000 & 0.998 & 0.995 & 1.000 & 0.501 \\
+SciBERT  & Coseno & 1.000 & 0.999 & 0.998 & 1.000 & 0.327 \\
+SciBERT  & L2     & 1.000 & 0.999 & 0.998 & 1.000 & 0.247 \\
+\hline
+\end{tabular}
+\end{table}

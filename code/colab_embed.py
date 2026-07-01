@@ -33,6 +33,7 @@ Celdas sugeridas en Colab:
 import shutil
 import numpy as np
 import pandas as pd
+import torch
 from datasets import load_dataset
 from sentence_transformers import SentenceTransformer, models
 
@@ -100,20 +101,20 @@ def build_subset() -> tuple[pd.DataFrame, pd.DataFrame]:
 # ---------------------------------------------------------------------------
 # 2. Vectorización
 # ---------------------------------------------------------------------------
-def load_model(model_key: str) -> SentenceTransformer:
+def load_model(model_key: str, device: str) -> SentenceTransformer:
     spec = cfg.MODELS[model_key]
     # SciBERT es un BERT puro: lo envolvemos con pooling de media para obtener
     # un único vector por abstract. E5 ya trae su propio pooling.
     if model_key == "scibert":
         word = models.Transformer(spec["hf"], max_seq_length=cfg.MAX_SEQ_LEN)
         pool = models.Pooling(word.get_word_embedding_dimension(), pooling_mode="mean")
-        return SentenceTransformer(modules=[word, pool])
-    model = SentenceTransformer(spec["hf"])
+        return SentenceTransformer(modules=[word, pool], device=device)
+    model = SentenceTransformer(spec["hf"], device=device)
     model.max_seq_length = cfg.MAX_SEQ_LEN
     return model
 
 
-def encode(model, texts, prefix: str | None) -> np.ndarray:
+def encode(model, texts, prefix, device) -> np.ndarray:
     if prefix:
         texts = [prefix + t for t in texts]
     emb = model.encode(
@@ -122,11 +123,24 @@ def encode(model, texts, prefix: str | None) -> np.ndarray:
         show_progress_bar=True,
         convert_to_numpy=True,
         normalize_embeddings=False,   # la normalización para coseno se hace en local
+        device=device,                # fuerza el dispositivo detectado (GPU si la hay)
     )
     return emb.astype(np.float32)
 
 
 def main():
+    # --- Verificación de dispositivo: aborta si no hay GPU para no perder horas ---
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    print(f">>> Dispositivo de cómputo: {device}")
+    if device == "cuda":
+        print(f">>> GPU detectada: {torch.cuda.get_device_name(0)}")
+    else:
+        raise SystemExit(
+            "ERROR: no se detectó GPU. En CPU la vectorización tarda horas.\n"
+            "En Colab: Entorno de ejecución -> Cambiar tipo de entorno -> T4 GPU, "
+            "y reinicia el entorno antes de volver a ejecutar."
+        )
+
     corpus, queries = build_subset()
 
     corpus[["id", "major"]].to_parquet(cfg.corpus_meta_path())
@@ -134,21 +148,22 @@ def main():
 
     for key, spec in cfg.MODELS.items():
         print(f"\n=== Vectorizando con {key} ({spec['hf']}) ===")
-        model = load_model(key)
+        model = load_model(key, device)
 
         corpus_prefix = "passage: " if spec["prefix"] else None
         query_prefix = "query: " if spec["prefix"] else None
 
         print("corpus ...")
-        c = encode(model, corpus["abstract"].tolist(), corpus_prefix)
+        c = encode(model, corpus["abstract"].tolist(), corpus_prefix, device)
         np.save(cfg.corpus_emb_path(key), c)
 
         print("queries ...")
-        q = encode(model, queries["abstract"].tolist(), query_prefix)
+        q = encode(model, queries["abstract"].tolist(), query_prefix, device)
         np.save(cfg.query_emb_path(key), q)
 
         print(f"  {key}: corpus {c.shape}  query {q.shape}")
         del model
+        torch.cuda.empty_cache()
 
     print("\nEmpaquetando embeddings.zip ...")
     shutil.make_archive("embeddings", "zip", cfg.DATA_DIR)
