@@ -3,3 +3,7 @@ faiss-cpu>=1.7.4
 numpy>=1.24.0
 pandas>=2.0.0
 pyarrow>=14.0.0
+scipy>=1.10.0        # pruebas de significancia (O3): McNemar y Wilcoxon
+matplotlib>=3.7.0    # figuras (06_plots.py, 07b_plot_ef_search.py)
+sentence-transformers>=2.2.0   # vectorización local de consultas naturales (O4)
+torch>=2.0.0                   # backend de sentence-transformers (CPU basta)

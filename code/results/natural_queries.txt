@@ -1,0 +1,5 @@
+Known-item title->abstract (O4) — mejor config: coseno, M=32, ef_c=400, ef_search=50, n=1000
+
+  model  recall@1  recall@5  recall@10    mrr
+scibert     0.074     0.152      0.194 0.1069
+     e5     0.869     0.946      0.953 0.9021
