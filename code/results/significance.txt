@@ -1,0 +1,22 @@
+======================================================================
+O3 — Significancia estadística: SciBERT vs. E5-large
+Config: coseno, M=32, ef_c=400, ef_search=50 | n=1000 consultas (pareadas)
+======================================================================
+
+Recall@10 medio:  SciBERT=0.9979   E5-large=0.9948   (dif=+0.0031)
+MRR medio:        SciBERT=1.0000   E5-large=0.9990   (dif=+0.0010)
+
+--- McNemar exacto (acierto = Recall@10 perfecto por consulta) ---
+Consultas con Recall@10=1,0:  SciBERT=982   E5-large=951
+Pares discordantes: b (SciBERT sí, E5 no)=47   c (SciBERT no, E5 sí)=16
+p-valor bilateral (binomial exacto) = 0.0001
+
+--- Wilcoxon rangos con signo (Recall@10 por consulta) ---
+W=581.5   p-valor bilateral=0.0006   tamaño de efecto (rank-biserial)=+0.389
+
+--- Wilcoxon rangos con signo (rango recíproco / MRR por consulta) ---
+W=0.0   p-valor bilateral=0.3173   tamaño de efecto (rank-biserial)=+1.000
+
+======================================================================
+Con alpha=0.05: la diferencia en Recall@10 es SIGNIFICATIVA.
+======================================================================
