@@ -1,0 +1,7 @@
+model,metric,M,ef_construction,ef_search,latency_ms,recall@1,recall@5,recall@10,mrr
+scibert,cosine,32,400,10,0.0878,0.998,0.9848,0.9633,0.998
+scibert,cosine,32,400,20,0.1881,0.998,0.9942,0.9851,0.998
+scibert,cosine,32,400,50,0.3152,1.0,0.999,0.9984,1.0
+scibert,cosine,32,400,100,0.4753,1.0,0.9994,0.9996,1.0
+scibert,cosine,32,400,200,0.697,1.0,0.9994,0.9998,1.0
+scibert,cosine,32,400,400,1.3599,1.0,0.9994,0.9998,1.0

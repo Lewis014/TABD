@@ -1,0 +1,21 @@
+\begin{table}[H]
+\caption{Análisis de sensibilidad de \textit{ef\_search} sobre la mejor
+configuración (SciBERT, coseno, $M=32$, \textit{ef\_construction}$=400$;
+49\,000 documentos, 1\,000 consultas). El índice se construye una sola vez y solo
+se varía \textit{ef\_search}. La fila \textit{ef\_search}$=50$ reproduce la
+Tabla~\ref{tab:resultados}.}\label{tab:efsearch}
+\centering
+\begin{tabular}{|c|c|c|c|c|c|}
+\hline
+\textbf{\textit{ef\_search}} & \textbf{R@1} & \textbf{R@5} & \textbf{R@10} &
+\textbf{MRR} & \textbf{Lat. (ms)} \\
+\hline
+10  & 0,998 & 0,985 & 0,963 & 0,998 & 0,09 \\
+20  & 0,998 & 0,994 & 0,985 & 0,998 & 0,19 \\
+50  & 1,000 & 0,999 & \textbf{0,998} & 1,000 & 0,32 \\
+100 & 1,000 & 0,999 & 1,000 & 1,000 & 0,48 \\
+200 & 1,000 & 0,999 & 1,000 & 1,000 & 0,70 \\
+400 & 1,000 & 0,999 & 1,000 & 1,000 & 1,36 \\
+\hline
+\end{tabular}
+\end{table}
