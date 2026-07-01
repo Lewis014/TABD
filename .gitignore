@@ -1,0 +1,28 @@
+# Datos y embeddings: regenerables desde colab_embed.py y demasiado grandes para git
+code/data/
+code/corpus_meta.parquet
+*.npy
+*.zip
+
+# Bytecode y caché de Python
+__pycache__/
+*.pyc
+
+# Entornos virtuales
+.venv/
+venv/
+env/
+
+# Artefactos de compilación LaTeX
+*.aux
+*.log
+*.out
+*.synctex.gz
+*.toc
+*.bbl
+*.blg
+*.fdb_latexmk
+*.fls
+*.fff
+*.lof
+*.lot
