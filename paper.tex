@@ -218,9 +218,9 @@ El sistema realiza tres tareas interdependientes: leer el resumen, convertirlo e
 
 Cada paso se basa en una biblioteca de código abierto de eficacia probada, y todos los elementos se integran en una configuración que incluye rutas, hiperparámetros y un valor aleatorio, lo que garantiza la reproducibilidad de los experimentos.
 
-Cabe destacar que el sistema construye los vectores para cada modelo. SciBERT genera una representación para cada palabra del resumen, lo que significa que estos resultados se promedian en un vector (una operación de concatenación \cite{ref3}). E5-large funciona de manera diferente: requiere que cada texto esté etiquetado; las consultas etiquetadas como \texttt{"query"} y los documentos etiquetados como \texttt{"passed"} constituyen una regla definida durante el entrenamiento que debe seguirse para evitar cualquier degradación de la calidad.
+Cabe destacar que el sistema construye los vectores para cada modelo. SciBERT genera una representación para cada palabra del resumen, lo que significa que estos resultados se promedian en un único vector (\textit{mean pooling} \cite{ref3}). E5-large funciona de manera diferente: requiere que cada texto esté etiquetado; las consultas etiquetadas como \texttt{"query"} y los documentos etiquetados como \texttt{"passage"} constituyen una regla definida durante el entrenamiento que debe seguirse para evitar cualquier degradación de la calidad.
 
-El núcleo de este sistema, indexación y búsqueda se basa completamente en la biblioteca \texttt{FAISS}, diseñada para búsquedas rápidas de vecinos en millones de vectores. El valor real se calcula mediante una búsqueda exacta que compara cada consulta con el conjunto de datos completo. Se crea un índice tentativo 36 utilizando HNSW, que activa la función \texttt{ef\_construction} durante la configuración y la función \texttt{ef\_search} durante la ejecución de la consulta. Cabe destacar que \texttt{FAISS} no considera la similitud del coseno por defecto; en su lugar, esta se realiza normalizando los vectores y calculando productos escalares, en cuyo caso ambos son matemáticamente equivalentes. Finalmente, cada ejecución exporta los valores a un archivo \texttt{CSV} a partir del cual se genera automáticamente una lista de elementos sin necesidad de introducirlos manualmente.
+El núcleo de este sistema, indexación y búsqueda se basa completamente en la biblioteca \texttt{FAISS}, diseñada para búsquedas rápidas de vecinos en millones de vectores. El valor real se calcula mediante una búsqueda exacta que compara cada consulta con el conjunto de datos completo. Se construyen los 36 índices HNSW, que emplean \texttt{ef\_construction} durante la construcción y \texttt{ef\_search} durante la ejecución de la consulta. Cabe destacar que \texttt{FAISS} no considera la similitud del coseno por defecto; en su lugar, esta se realiza normalizando los vectores y calculando productos escalares, en cuyo caso ambos son matemáticamente equivalentes. Finalmente, cada ejecución exporta los valores a un archivo \texttt{CSV} a partir del cual se genera automáticamente una lista de elementos sin necesidad de introducirlos manualmente.
 
 % -------------------------------------------------------
 \subsection{Demostración interactiva}
@@ -242,7 +242,7 @@ HNSW, con la latencia medida en tiempo real.}
 \label{sec:resultados}
 % -------------------------------------------------------
 
-Analicemos primero los resultados más impresionantes: las 36 configuraciones fueron exitosas. Incluso la configuración con peor rendimiento alcanzó una utilización de memoria del $10\,\%$ ($0{,}946$), y todas las configuraciones tuvieron tiempos de respuesta inferiores a $1\text{~ms}$ ($0{,}09$--$0{,}70\text{~ms}$ por solicitud). Este intervalo de tiempo es demasiado corto para analizarlo, ya que en condiciones normales las diferencias son mínimas. Sin embargo, los tres factores que ajustamos en este intervalo tuvieron un impacto significativo. La Tabla~\ref{tab:resultados} muestra la configuración óptima para cada combinación de modelo y métrica.
+Analicemos primero los resultados más impresionantes: las 36 configuraciones fueron exitosas. Incluso la configuración con peor rendimiento alcanzó un $\text{Recall}@10$ superior a $0{,}94$ ($0{,}946$), y todas las configuraciones tuvieron tiempos de respuesta inferiores a $1\text{~ms}$ ($0{,}09$--$0{,}70\text{~ms}$ por solicitud). Este intervalo de tiempo es demasiado corto para analizarlo, ya que en condiciones normales las diferencias son mínimas. Sin embargo, los tres factores que ajustamos en este intervalo tuvieron un impacto significativo. La Tabla~\ref{tab:resultados} muestra la configuración óptima para cada combinación de modelo y métrica; el detalle de las 36 configuraciones se recoge en la Tabla~\ref{tab:completa} del apéndice.
 
 \begin{table}[h]
 \caption{Recall@K, MRR y latencia de la mejor configuración por modelo de embedding
@@ -263,8 +263,6 @@ E5-large  & L2     & 32 & 200 & 1,000 & 0,998 & 0,995 & 1,000 & 0,50 \\
 \end{tabular}
 \end{table}
 
-% \input{code/results/tabla_completa.tex} % Tabla completa de 36 configuraciones (comentada por ahora)
-
 De estos tres parámetros, el efecto de $M$ es el más pronunciado. Cuando $M = 8$, $\text{Recall}@10$ se mantiene entre $0{,}95$ y $0{,}96$; cuando $M$ llega a 16, $\text{Recall}@10$ supera ligeramente $0{,}98$; y cuando $M$ llega a 32, $\text{Recall}@10$ se estabiliza alrededor de $0{,}99$. Se observa un aumento significativo entre 8 y 16: más allá de 16, el índice tiende hacia el límite superior y, por lo tanto, $\text{Recall}@10$ aumenta ligeramente. El MRR confirma esto desde otro ángulo: cuando $M \ge 16$, el MRR se estabiliza entre $0{,}997$ y $1{,}000$, lo que significa que el primer vecino coincidente está casi siempre en la primera posición. 
 
 La situación cambia durante la construcción del elemento de respuesta, lo cual es algo decepcionante. Aumentar este parámetro de 100 a 400 mejora la tasa de recuperación de 10 puntos ($\text{Recall}@10$) en solo unos pocos puntos porcentuales (de $0{,}993$ a $0{,}998$, e incluso más para el modelo SciBERT usando la transformada coseno y $M=32$), pero casi duplica el tiempo de indexación: de aproximadamente $15\text{~segundos}$ a $44\text{~segundos}$. El objetivo no es lograr la máxima precisión, sino mejorarla. Si se requiere una reconstrucción continua del índice, es más eficiente reducir este parámetro que aumentarlo. 
@@ -279,9 +277,9 @@ vectores de 768 dimensiones y E5-large con 1024; tener menos dimensiones abarata
 comparación de distancia, y sobre estos abstracts esa economía no costó nada en
 la fidelidad del índice. El que sabía del dominio resultó, encima, el más ligero.
 
-Para descartar que ese margen de $0{,}003$ en $\text{Recall}@10$ pueda causar la variabilidad entre consultas, las comparamos a pruebas estadísticas pareadas. La prueba de McNemar arroja 47 consultas a favor de SciBERT frente a 16 a favor de E5-large entre los pares discordantes. La prueba de Wilcoxon de
+Para descartar que ese margen de $0{,}003$ en $\text{Recall}@10$ sea atribuible a la variabilidad entre consultas, lo sometimos a pruebas estadísticas pareadas. La prueba de McNemar arroja 47 consultas a favor de SciBERT frente a 16 a favor de E5-large entre los pares discordantes. La prueba de Wilcoxon de
 rangos sobre el $\text{Recall}@10$ por consulta lo confirma. Por lo tanto, la ventaja de SciBERT en $\text{Recall}@10$ es estadísticamente significativa y no un
-efecto del azar. Por otro lado, la diferencia en MRR de $1{,}000$ frente a $0{,}999$, no alcanza significanca. Ambos modelos sitúan el primer
+efecto del azar. Por otro lado, la diferencia en MRR de $1{,}000$ frente a $0{,}999$ no alcanza significancia. Ambos modelos sitúan el primer
 vecino verdadero en la primera posición casi siempre, así que en MRR son
 estadísticamente equivalentes. En síntesis, SciBERT aventaja a E5-large de forma
 significativa en la fidelidad del índice ($\text{Recall}@10$ abstract-a-abstract), mientras que en MRR son equivalentes. No obstante, como se muestra en la Sección~\ref{sec:consultas-naturales}, esta ventaja en fidelidad no se traduce en una mejor recuperación cuando la consulta es una frase corta en lenguaje natural.
@@ -313,7 +311,7 @@ resumen el resultado.
 
 \begin{table}[H]
 \caption{Análisis de sensibilidad de \textit{ef\_search} sobre la mejor
-configuración mencionada anteriormente. El índice se construye una sola vez y solo varía \textit{ef\_search}}\label{tab:efsearch}
+configuración mencionada anteriormente. El índice se construye una sola vez y solo varía \textit{ef\_search}.}\label{tab:efsearch}
 \centering
 \begin{tabular}{|c|c|c|c|c|c|}
 \hline
@@ -382,7 +380,7 @@ a una similitud media de solo $0{,}733$ de su propio abstract, lo cual está por
 de otros documentos, mientras que E5-large, es entrenado con pares para el emparejamiento asimétrico consulta a documento,
 lo cual lo sitúa a $0{,}878$ y mayormente en la primera posición. La superioridad de
 SciBERT observada antes se limita, por la fidelidad del índice sobre su
-propio espacio vectorial y no se traslada a la calidad de recuperación.Cuando la consulta es una frase corta real, el modelo a desplegar es E5-large. Esto nos evidencia que la fidelidad al índice exacto y la
+propio espacio vectorial y no se traslada a la calidad de recuperación. Cuando la consulta es una frase corta real, el modelo a desplegar es E5-large. Esto nos evidencia que la fidelidad al índice exacto y la
 utilidad de recuperación son ejes distintos, por lo que la elección del modelo debe basarse en su uso.
 
 \begin{figure}[H]
@@ -457,13 +455,13 @@ $60\,000$ documentos y la ventaja de HNSW se ensancha a partir de ahí.}
 
 Aplicamos el algoritmo HNSW a un área relativamente inexplorada: los artículos científicos, ricos en jerga técnica y con una distribución desigual de temas.
 
-Lo probamos técnicamente: utilizando dos modelos conocidos que representan puntos de vista opuestos, 36 configuraciones y un análisis de probabilidad por fuerza bruta, los resultados fueron claros. HNSW es eficiente, lo cual es crucial. Incluso la peor configuración encuentra más del $94\,\%$ de los resultados de búsqueda correctos en menos de un milisegundo. El algoritmo está bien descrito en la literatura científica.
+Lo probamos técnicamente: utilizando dos modelos conocidos que representan puntos de vista opuestos, 36 configuraciones y un análisis de probabilidad por fuerza bruta, los resultados fueron claros. HNSW es preciso: incluso la peor configuración recupera más del $94\,\%$ de los vecinos correctos en menos de un milisegundo. Su ventaja de velocidad frente a la búsqueda exacta, en cambio, depende de la escala y solo se hace patente en corpus mayores (Sección~\ref{sec:escalabilidad}). El algoritmo está bien descrito en la literatura científica.
 
 De los numerosos parámetros, $M$ es el más importante, ya que determina el equilibrio adecuado entre precisión y coste. El parámetro \texttt{ef\_construction} es apenas suficiente, pero ofrece beneficios significativos durante la fase de configuración. Las dimensiones vectoriales normalizadas arrojaron resultados similares. El modelo específico (SciBERT) fue más rápido y más fiel a la búsqueda exacta, pero esa ventaja no se sostiene en el uso real: ante consultas cortas en lenguaje natural, el modelo general orientado a recuperación (E5-large) recupera el documento correcto mucho mejor. La elección del modelo depende, por tanto, del escenario de uso. Todo esto proporciona una guía práctica para quienes deseen implementar algoritmos similares.
 
-Recomendación de entorno (Heurística): Elija un valor medio o alto para $M$, configure \texttt{ef\_construction} en un nivel medio si no requiere una precisión extrema y, para consultas en lenguaje natural, prefiera un modelo entrenado para recuperación (como E5-large) antes que uno meramente específico del dominio. El ejemplo adjunto ilustra este punto:
+Recomendación de entorno (Heurística): Elija un valor medio o alto para $M$, configure \texttt{ef\_construction} en un nivel medio si no requiere una precisión extrema y, para consultas en lenguaje natural, prefiera un modelo entrenado para recuperación (como E5-large) antes que uno meramente específico del dominio.
 
-Esta misma configuración permite crear una herramienta de búsqueda que proporciona respuestas instantáneas de principio a fin sin necesidad de configuración adicional.
+El pipeline que acompaña este trabajo permite montar una herramienta de búsqueda funcional de principio a fin sin configuración adicional, eligiendo el modelo de embedding según el escenario de uso.
 
 % -------------------------------------------------------
 \section{Discusión}
@@ -477,7 +475,67 @@ El corpus está en inglés, y nuestro hallazgo con consultas naturales apunta en
 
 Asimismo, aunque analizamos la sensibilidad de \texttt{ef\_search} sobre la configuración  óptima que se menciona en Sección~\ref{sec:resultados}, donde se confirma que el valor 50 se sitúa en el codo de la relación exactitud y latencia; sin embargo, no se exploró su interacción cruzada completa con $M$ y \texttt{ef\_construction} a lo largo de las 36 configuraciones; ese barrido tridimensional queda como trabajo futuro. Compartimos la opinión mostrada en estudios previos, que los métodos basados en grafos superan a otros enfoques en escenarios de alta dimensionalidad \cite{ref4,ref5} , también que la métrica de distancia se vuelve irrelevante después de la normalización vectorial. Aún no hay trabajos que hayan definido estas compensaciones en el contexto de los resúmenes científicos. Por lo que nuestra contribución es innovadora porque comparamos directamente el embedding específico del dominio y el generalista, y mostramos que su orden se invierte según se mida la fidelidad del índice o la recuperación ante consultas reales.
 
-Estas limitaciones también abren nuevas vías para futuras investigaciones. Podemos observar el rendimiento de la indexación bajo una carga pesada aumentando el tamaño del conjunto de datos a cientos de miles o incluso millones yde documentos. También consideramos imperativo evaluar modelos multilingües o específicos de la materia para abordar las restricciones de relevancia que HNSW, por su naturaleza puramente estructural, no puede resolver por sí mismo. Finalmente, planeamos analizar en detalle el comportamiento dinámico de \texttt{ef\_search} antes de establecer la relación analítica definitiva entre la latencia de ejecución de la consulta y la precisión.
+Estas limitaciones también abren nuevas vías para futuras investigaciones. Podemos observar el rendimiento de la indexación bajo una carga pesada aumentando el tamaño del conjunto de datos a cientos de miles o incluso millones de documentos. También consideramos imperativo evaluar modelos multilingües o específicos de la materia para abordar las restricciones de relevancia que HNSW, por su naturaleza puramente estructural, no puede resolver por sí mismo. Finalmente, planeamos analizar en detalle el comportamiento dinámico de \texttt{ef\_search} antes de establecer la relación analítica definitiva entre la latencia de ejecución de la consulta y la precisión.
+
+% -------------------------------------------------------
+\section*{Apéndice: Resultados completos}
+% -------------------------------------------------------
+
+La Tabla~\ref{tab:completa} lista las métricas de las 36 configuraciones evaluadas
+(2 modelos $\times$ 3 valores de $M$ $\times$ 3 de \textit{ef\_construction}
+$\times$ 2 métricas), sobre FAISS-HNSW con 49\,000 documentos, 1\,000 consultas y
+\textit{ef\_search}$=50$.
+
+\begin{table}[H]
+\caption{Resultados completos de las 36 configuraciones (\textit{ef\_search}$=50$).}
+\label{tab:completa}
+\centering
+\footnotesize
+\setlength{\tabcolsep}{4pt}
+\renewcommand{\arraystretch}{0.9}
+\begin{tabular}{|l|l|c|c|c|c|c|c|c|}
+\hline
+\textbf{Modelo} & \textbf{Métrica} & \textbf{$M$} & \textbf{\textit{ef\_c}} & \textbf{R@1} & \textbf{R@5} & \textbf{R@10} & \textbf{MRR} & \textbf{Lat.(ms)} \\
+\hline
+E5-large & Coseno & 8 & 100 & 0,982 & 0,967 & 0,947 & 0,982 & 0,128 \\
+E5-large & Coseno & 8 & 200 & 0,987 & 0,976 & 0,956 & 0,987 & 0,125 \\
+E5-large & Coseno & 8 & 400 & 0,991 & 0,979 & 0,960 & 0,991 & 0,126 \\
+E5-large & Coseno & 16 & 100 & 1,000 & 0,993 & 0,984 & 1,000 & 0,248 \\
+E5-large & Coseno & 16 & 200 & 1,000 & 0,995 & 0,986 & 1,000 & 0,260 \\
+E5-large & Coseno & 16 & 400 & 1,000 & 0,996 & 0,987 & 1,000 & 0,308 \\
+E5-large & Coseno & 32 & 100 & 1,000 & 0,997 & 0,992 & 1,000 & 0,548 \\
+E5-large & Coseno & 32 & 200 & 1,000 & 0,998 & 0,993 & 1,000 & 0,699 \\
+E5-large & Coseno & 32 & 400 & 0,999 & 0,997 & 0,995 & 0,999 & 0,398 \\
+E5-large & L2 & 8 & 100 & 0,981 & 0,968 & 0,946 & 0,981 & 0,123 \\
+E5-large & L2 & 8 & 200 & 0,988 & 0,977 & 0,956 & 0,988 & 0,123 \\
+E5-large & L2 & 8 & 400 & 0,990 & 0,979 & 0,960 & 0,990 & 0,132 \\
+E5-large & L2 & 16 & 100 & 1,000 & 0,994 & 0,984 & 1,000 & 0,225 \\
+E5-large & L2 & 16 & 200 & 1,000 & 0,996 & 0,987 & 1,000 & 0,236 \\
+E5-large & L2 & 16 & 400 & 1,000 & 0,996 & 0,987 & 1,000 & 0,252 \\
+E5-large & L2 & 32 & 100 & 0,999 & 0,997 & 0,992 & 0,999 & 0,318 \\
+E5-large & L2 & 32 & 200 & 1,000 & 0,998 & 0,995 & 1,000 & 0,501 \\
+E5-large & L2 & 32 & 400 & 1,000 & 0,997 & 0,995 & 1,000 & 0,399 \\
+SciBERT & Coseno & 8 & 100 & 0,952 & 0,966 & 0,952 & 0,952 & 0,109 \\
+SciBERT & Coseno & 8 & 200 & 0,952 & 0,974 & 0,962 & 0,952 & 0,098 \\
+SciBERT & Coseno & 8 & 400 & 0,961 & 0,980 & 0,966 & 0,961 & 0,090 \\
+SciBERT & Coseno & 16 & 100 & 0,996 & 0,994 & 0,989 & 0,996 & 0,145 \\
+SciBERT & Coseno & 16 & 200 & 0,998 & 0,996 & 0,991 & 0,998 & 0,159 \\
+SciBERT & Coseno & 16 & 400 & 0,999 & 0,998 & 0,994 & 0,999 & 0,162 \\
+SciBERT & Coseno & 32 & 100 & 0,999 & 0,997 & 0,993 & 0,999 & 0,459 \\
+SciBERT & Coseno & 32 & 200 & 1,000 & 0,998 & 0,997 & 1,000 & 0,218 \\
+SciBERT & Coseno & 32 & 400 & 1,000 & 0,999 & \textbf{0,998} & 1,000 & 0,327 \\
+SciBERT & L2 & 8 & 100 & 0,953 & 0,966 & 0,953 & 0,953 & 0,093 \\
+SciBERT & L2 & 8 & 200 & 0,956 & 0,976 & 0,964 & 0,956 & 0,105 \\
+SciBERT & L2 & 8 & 400 & 0,974 & 0,982 & 0,969 & 0,974 & 0,098 \\
+SciBERT & L2 & 16 & 100 & 0,997 & 0,995 & 0,989 & 0,997 & 0,151 \\
+SciBERT & L2 & 16 & 200 & 0,998 & 0,995 & 0,992 & 0,998 & 0,166 \\
+SciBERT & L2 & 16 & 400 & 0,999 & 0,998 & 0,993 & 0,999 & 0,167 \\
+SciBERT & L2 & 32 & 100 & 0,999 & 0,998 & 0,994 & 0,999 & 0,339 \\
+SciBERT & L2 & 32 & 200 & 1,000 & 0,998 & 0,996 & 1,000 & 0,221 \\
+SciBERT & L2 & 32 & 400 & 1,000 & 0,999 & 0,998 & 1,000 & 0,247 \\
+\hline
+\end{tabular}
+\end{table}
 
 % -------------------------------------------------------
 % Referencias — ordenadas por orden de primera aparición en el texto
