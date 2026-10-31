@@ -1,10 +1,12 @@
 """
 Demo Streamlit — Búsqueda semántica de abstracts científicos con HNSW.
 
-Reutiliza los embeddings ya generados (SciBERT) y construye el índice HNSW con la
-configuración ÓPTIMA hallada en el experimento: coseno, M=32, ef_construction=400.
-El usuario escribe una consulta, se vectoriza con SciBERT y se recuperan los
-abstracts más parecidos en milisegundos.
+Reutiliza los embeddings ya generados (E5-large) y construye el índice HNSW con la
+configuración coseno, M=32, ef_construction=400. Se usa E5-large ---y no SciBERT---
+porque, aunque SciBERT es más fiel al índice exacto, E5-large recupera mucho mejor
+ante consultas cortas en lenguaje natural, que es el caso de uso de esta demo
+(véase la evaluación known-item en la Sección 5.2 del paper). El usuario escribe una
+consulta, se vectoriza con E5-large y se recuperan los abstracts más parecidos.
 
 Ejecutar:
     pip install -r requirements_app.txt
@@ -16,12 +18,13 @@ import numpy as np
 import pandas as pd
 import streamlit as st
 import faiss
-from sentence_transformers import SentenceTransformer, models
+from sentence_transformers import SentenceTransformer
 
 import config as cfg
 
-# Configuración ganadora del experimento (Sección 5 del paper)
-BEST = {"model": "scibert", "metric": "cosine", "M": 32, "ef_construction": 400}
+# Modelo de recuperación para el despliegue: E5-large, entrenado para el
+# emparejamiento consulta-documento (Sección 5.2 del paper). Config: coseno, M=32.
+BEST = {"model": "e5", "metric": "cosine", "M": 32, "ef_construction": 400}
 
 st.set_page_config(page_title="Búsqueda semántica HNSW", layout="centered")
 
@@ -29,17 +32,17 @@ st.set_page_config(page_title="Búsqueda semántica HNSW", layout="centered")
 # ---------------------------------------------------------------------------
 # Carga de recursos (una sola vez por sesión)
 # ---------------------------------------------------------------------------
-@st.cache_resource(show_spinner="Cargando modelo SciBERT...")
+@st.cache_resource(show_spinner="Cargando modelo E5-large...")
 def load_model() -> SentenceTransformer:
-    spec = cfg.MODELS["scibert"]
-    word = models.Transformer(spec["hf"], max_seq_length=cfg.MAX_SEQ_LEN)
-    pool = models.Pooling(word.get_word_embedding_dimension(), pooling_mode="mean")
-    return SentenceTransformer(modules=[word, pool], device="cpu")
+    spec = cfg.MODELS["e5"]
+    model = SentenceTransformer(spec["hf"], device="cpu")
+    model.max_seq_length = cfg.MAX_SEQ_LEN
+    return model
 
 
 @st.cache_resource(show_spinner="Construyendo índice HNSW (una vez)...")
 def load_index() -> faiss.Index:
-    emb = np.load(cfg.corpus_emb_path("scibert")).astype(np.float32)
+    emb = np.load(cfg.corpus_emb_path("e5")).astype(np.float32)
     faiss.normalize_L2(emb)  # coseno = producto interno sobre vectores normalizados
     index = faiss.IndexHNSWFlat(emb.shape[1], BEST["M"], faiss.METRIC_INNER_PRODUCT)
     index.hnsw.efConstruction = BEST["ef_construction"]
@@ -58,7 +61,9 @@ def load_docs() -> pd.DataFrame:
 
 
 def embed_query(model: SentenceTransformer, q: str) -> np.ndarray:
-    v = model.encode([q], convert_to_numpy=True).astype(np.float32)
+    # E5 exige el prefijo "query: " en las consultas (los documentos del corpus se
+    # vectorizaron con "passage: "); omitirlo degrada la calidad.
+    v = model.encode(["query: " + q], convert_to_numpy=True).astype(np.float32)
     faiss.normalize_L2(v)
     return v
 
@@ -72,8 +77,8 @@ docs = load_docs()
 
 st.title("Búsqueda semántica de abstracts científicos mediante indexación HNSW")
 st.caption(
-    f"Demo sobre {len(docs):,} abstracts de arXiv · SciBERT (768d) · "
-    "FAISS-HNSW · similitud coseno · configuración óptima (M=32, ef\\_c=400)"
+    f"Demo sobre {len(docs):,} abstracts de arXiv · E5-large (1024d) · "
+    "FAISS-HNSW · similitud coseno · M=32, ef\\_c=400"
 )
 
 st.session_state.setdefault("query", "")
