@@ -1,57 +1,48 @@
 """
-Figura de sensibilidad de ef_search (observación O1).
+Figura de sensibilidad de ef_search.
 
-Lee results/ef_search_sensitivity.csv y produce ../Images/fig_ef_search.png:
-un eje doble con Recall@10 (izquierda) y latencia por consulta (derecha) frente
-a ef_search, sobre la mejor configuración (SciBERT, coseno, M=32, ef_c=400).
-Se marca ef_search=50 —el valor usado en el estudio— para mostrar que cae en el
-"codo" de la curva: por debajo el recall cae, por encima solo crece la latencia.
+Lee results/ef_search_sensitivity.csv y produce ../Images/fig_ef_search.png: dos paneles
+con un solo eje cada uno, Recall@10 y latencia por consulta frente a ef_search, para los
+dos modelos y cada M. El color es el modelo y el marcador es M.
 
 Ejecutar:
     python 07b_plot_ef_search.py
 """
 
-from pathlib import Path
 import pandas as pd
 import matplotlib.pyplot as plt
 
-CSV = Path(__file__).parent / "results" / "ef_search_sensitivity.csv"
-IMAGES = Path(__file__).parent.parent / "Images"
-IMAGES.mkdir(exist_ok=True)
+import config as cfg
+import plot_style as ps
 
-df = pd.read_csv(CSV).sort_values("ef_search")
+ps.apply()
+df = pd.read_csv(cfg.RESULTS_DIR / "ef_search_sensitivity.csv")
+ref = cfg.load_reference()
 
-C_RECALL = "#1f77b4"   # mismo azul de SciBERT en las otras figuras
-C_LAT = "#d62728"      # rojo para latencia
+M_STYLE = {8: (":", "v"), 16: ("--", "s"), 32: ("-", "o")}
 
-fig, ax1 = plt.subplots(figsize=(6, 4))
+fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(7.2, 3.2))
+for model in cfg.MODELS:
+    for M, (ls, marker) in M_STYLE.items():
+        d = df[(df["model"] == model) & (df["M"] == M)].sort_values("ef_search")
+        label = f"{cfg.MODELS[model]['label']}, $M$={M}"
+        for ax, col in ((ax1, "recall@10"), (ax2, "latency_ms")):
+            ax.plot(d["ef_search"], d[col], linestyle=ls, marker=marker,
+                    color=ps.MODEL_COLOR[model], label=label)
 
-# Eje izquierdo: Recall@10
-ax1.plot(df["ef_search"], df["recall@10"], marker="o", color=C_RECALL,
-         linewidth=1.8, markersize=7, label="Recall@10")
-ax1.set_xlabel("ef_search (amplitud de búsqueda en consulta)")
-ax1.set_ylabel("Recall@10", color=C_RECALL)
-ax1.tick_params(axis="y", labelcolor=C_RECALL)
-ax1.set_ylim(0.955, 1.002)
-ax1.set_xscale("log")
-ax1.set_xticks(df["ef_search"])
-ax1.get_xaxis().set_major_formatter(plt.ScalarFormatter())
-ax1.grid(True, alpha=0.3)
+for ax in (ax1, ax2):
+    ax.set_xscale("log")
+    ax.set_xticks(cfg.EF_SEARCH_GRID)
+    ax.set_xticklabels(cfg.EF_SEARCH_GRID)
+    ax.minorticks_off()
+    ax.set_xlabel(r"$\mathit{ef\_search}$")
 
-# Eje derecho: latencia
-ax2 = ax1.twinx()
-ax2.plot(df["ef_search"], df["latency_ms"], marker="s", color=C_LAT,
-         linewidth=1.8, markersize=7, linestyle="--", label="Latencia")
-ax2.set_ylabel("Latencia por consulta (ms)", color=C_LAT)
-ax2.tick_params(axis="y", labelcolor=C_LAT)
-
-# Marca del valor usado en el estudio (ef_search = 50)
-ax1.axvline(50, color="gray", linestyle=":", linewidth=1.2)
-ax1.annotate("ef_search = 50\n(valor del estudio)", xy=(50, 0.972),
-             xytext=(70, 0.965), fontsize=8, color="gray")
-
-ax1.set_title("Sensibilidad de ef_search — SciBERT · coseno · M=32 · ef_c=400",
-              fontsize=9)
-fig.tight_layout()
-fig.savefig(IMAGES / "fig_ef_search.png", dpi=200)
-print("Guardado:", IMAGES / "fig_ef_search.png")
+ax1.set_ylabel("Recall@10")
+ax1.axhline(cfg.REFERENCE_TARGET, color=ps.AXIS, linewidth=0.8)
+ax1.annotate(f"target {cfg.REFERENCE_TARGET}", (10, cfg.REFERENCE_TARGET), xytext=(0, -9),
+             textcoords="offset points", fontsize=7, color=ps.INK_SOFT)
+ax2.set_yscale("log")
+ps.plain_ticks(ax2.yaxis, [0.1, 0.2, 0.5, 1, 2])
+ax2.set_ylabel("Latency per query (ms, log scale)")
+ax2.legend(fontsize=7, loc="upper left")
+ps.save(fig, "fig_ef_search.png")

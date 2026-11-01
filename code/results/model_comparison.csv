@@ -1,0 +1,3 @@
+model,label,domain,retrieval_trained,dim,fidelity_r1,fidelity_r10,fidelity_r10_sd,search_ms,build_time_s,index_mb,title_r1,title_r5,title_r10,title_mrr10,title_r10_hnsw,title_sim_own,title_median_rank,encode_title_cpu_ms
+scibert,SciBERT,scientific,False,768,0.9994,0.997,0.0004,0.6564,11.2865,153.144,0.061,0.131,0.173,0.0926,0.1633,0.7306,259.0,45.0075
+e5,E5-large,general,True,1024,0.9984,0.9922,0.0004,0.982,22.2929,200.0366,0.869,0.941,0.949,0.8993,0.9437,0.8745,1.0,200.5489

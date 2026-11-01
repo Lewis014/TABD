@@ -1,0 +1,14 @@
+\begin{table}[tbp]
+\caption{End-to-end latency per query over 200 texts: query encoding plus HNSW search ($M=32$, \textit{ef\_c}$=100$, \textit{ef\_s}$=100$).}\label{tab:e2e}
+\centering
+\begin{tabular}{|l|c|l|c|c|c|c|c|}
+\hline
+\textbf{Model} & \textbf{Device} & \textbf{Text} & \textbf{Encode (ms)} & \textbf{p95 (ms)} & \textbf{Search (ms)} & \textbf{Total (ms)} & \textbf{Encode share} \\
+\hline
+SciBERT & CPU & Title & 45.0 & 53.6 & 0.57 & 45.6 & 98.8\,\% \\
+SciBERT & CPU & Abstract & 172.9 & 314.4 & 0.69 & 173.5 & 99.6\,\% \\
+E5-large & CPU & Title & 200.5 & 233.2 & 1.14 & 201.7 & 99.4\,\% \\
+E5-large & CPU & Abstract & 620.9 & 1072.0 & 1.01 & 621.9 & 99.8\,\% \\
+\hline
+\end{tabular}
+\end{table}

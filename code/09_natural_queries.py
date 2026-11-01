@@ -1,31 +1,34 @@
 """
-FASE B.5 — Consultas en lenguaje natural: known-item title->abstract (local, CPU)
-=================================================================================
+FASE B.5 — Consultas en lenguaje natural: known-item title->abstract (local)
+============================================================================
 
-Responde a la observación O4 de la revisión: la evaluación principal usa
-abstracts completos como consultas (abstract-a-abstract), pero el sistema real
-recibe frases cortas en lenguaje natural. Aquí evaluamos el escenario realista
-consulta_corta -> abstract mediante *known-item search*:
+La evaluación principal usa abstracts completos como consultas, pero el sistema real
+recibe frases cortas en lenguaje natural. Aquí se evalúa ese escenario mediante
+*known-item search*:
 
-  - Tomamos una muestra reproducible de documentos del corpus.
-  - Usamos su TÍTULO (una frase corta, ~10 palabras, en lenguaje natural) como
-    consulta. El título NO está indexado; solo lo están los abstracts.
-  - El documento relevante es unívoco: el propio abstract del que salió el título.
-  - Medimos si ese abstract aparece en el top-K (Success@K = Recall@K de known-item)
-    y su rango recíproco medio (MRR).
+  - Se toma una muestra reproducible de documentos del corpus.
+  - Su TÍTULO (una frase corta, ~10 palabras) es la consulta. El título NO está
+    indexado; solo lo están los abstracts.
+  - El documento relevante es unívoco: el abstract del mismo artículo.
+  - Se mide si ese abstract aparece en el top-K y su rango recíproco.
 
-Los títulos se vectorizan con EXACTAMENTE el mismo método que los abstracts del
-corpus (mean pooling en SciBERT; prefijo "query: " en E5), reutilizando
-colab_embed.load_model/encode, para que la comparación sea válida. La búsqueda usa
-la mejor configuración del estudio (coseno, M=32, ef_construction=400, ef_search=50).
+Cada modelo se evalúa con búsqueda exacta y con HNSW en la configuración de referencia:
+la exacta da el límite del modelo, y la diferencia entre ambas es el error del índice.
 
-Salida: results/natural_queries.csv (una fila por modelo) + results/natural_queries.txt
+La búsqueda exacta da el rango completo del abstract relevante, y con él la similitud
+título-abstract propio frente a la del documento mejor situado, sobre toda la muestra.
+
+Salida:
+  splits/known_item_ids.txt          la muestra, congelada para todos los modelos
+  data/clean/title_{modelo}.npy      títulos vectorizados
+  data/clean/natural_ranks_{modelo}.npz  rangos por consulta, para 08_significance.py
+  results/natural_queries.csv        una fila por modelo y tipo de búsqueda
 """
 
 import numpy as np
 import pandas as pd
 import faiss
-from sentence_transformers import SentenceTransformer, models
+import torch
 
 import config as cfg
 from importlib import import_module
@@ -33,120 +36,120 @@ from importlib import import_module
 _bench = import_module("04_benchmark")
 normalized = _bench.normalized
 
-
-# Réplica EXACTA del método de vectorización de la Fase A (colab_embed.py), sin
-# importar ese módulo para evitar su dependencia de `datasets` (solo usada en la
-# ingesta de Colab). SciBERT = Transformer + mean pooling; E5 trae su pooling.
-def load_model(model_key, device):
-    spec = cfg.MODELS[model_key]
-    if model_key == "scibert":
-        word = models.Transformer(spec["hf"], max_seq_length=cfg.MAX_SEQ_LEN)
-        pool = models.Pooling(word.get_word_embedding_dimension(), pooling_mode="mean")
-        return SentenceTransformer(modules=[word, pool], device=device)
-    model = SentenceTransformer(spec["hf"], device=device)
-    model.max_seq_length = cfg.MAX_SEQ_LEN
-    return model
-
-
-def encode(model, texts, prefix, device):
-    if prefix:
-        texts = [prefix + t for t in texts]
-    emb = model.encode(
-        texts, batch_size=cfg.BATCH_SIZE, show_progress_bar=True,
-        convert_to_numpy=True, normalize_embeddings=False, device=device,
-    )
-    return emb.astype(np.float32)
-
-CONFIG = {"metric": "cosine", "M": 32, "ef_construction": 400}
 N_SAMPLE = 1000          # nº de consultas title->abstract (muestra reproducible)
 SAMPLE_SEED = cfg.SEED + 2
-DEVICE = "cpu"
-K_LIST = [1, 5, 10]
+N_BUILDS = 3             # construcciones de HNSW por modelo
+DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
 
 def load_sample():
     """Muestra reproducible de documentos del corpus con (fila_embedding, título)."""
     meta = pd.read_parquet(cfg.corpus_meta_path())      # orden == filas de los .npy
-    text = pd.read_parquet(cfg.DATA_DIR / "corpus_text.parquet")[["id", "title"]]
+    text = pd.read_parquet(cfg.text_path())[["id", "title"]]
+    meta["id"] = meta["id"].astype(str)
+    text["id"] = text["id"].astype(str)
 
     id2row = {doc_id: i for i, doc_id in enumerate(meta["id"].tolist())}
     id2title = dict(zip(text["id"], text["title"]))
 
-    # documentos con título no vacío
-    valid_ids = [i for i in meta["id"].tolist()
-                 if isinstance(id2title.get(i), str) and len(id2title[i].strip()) > 0]
-
-    rng = np.random.default_rng(SAMPLE_SEED)
-    sample_ids = rng.choice(valid_ids, size=N_SAMPLE, replace=False)
+    if cfg.known_item_ids_path().exists():
+        sample_ids = cfg.read_ids(cfg.known_item_ids_path())
+    else:
+        # documentos con título no vacío
+        valid_ids = [i for i in meta["id"].tolist()
+                     if isinstance(id2title.get(i), str) and len(id2title[i].strip()) > 0]
+        rng = np.random.default_rng(SAMPLE_SEED)
+        sample_ids = rng.choice(valid_ids, size=N_SAMPLE, replace=False).tolist()
+        cfg.write_ids(cfg.known_item_ids_path(), sample_ids)
 
     titles = [id2title[i].replace("\n", " ").strip() for i in sample_ids]
     target_rows = np.array([id2row[i] for i in sample_ids])
     return titles, target_rows
 
 
-def embed_titles(model_key, titles):
-    """Vectoriza los títulos con el mismo método que el corpus (idéntico a Fase A)."""
-    spec = cfg.MODELS[model_key]
-    model = load_model(model_key, DEVICE)
-    prefix = "query: " if spec["prefix"] else None
-    return encode(model, titles, prefix, DEVICE)
+def title_embeddings(model_key, titles):
+    """Vectoriza los títulos una sola vez por modelo y reutiliza el resultado."""
+    path = cfg.title_emb_path(model_key)
+    if path.exists():
+        return np.load(path)
+    from encoders import load_encoder, encode
+    model = load_encoder(model_key, DEVICE)
+    emb = encode(model_key, model, titles, "short_query", DEVICE)
+    np.save(path, emb)
+    return emb
 
 
-def evaluate(model_key, titles, target_rows):
-    corpus = normalized(np.load(cfg.corpus_emb_path(model_key)))
-    d = corpus.shape[1]
-    index = faiss.IndexHNSWFlat(d, CONFIG["M"], faiss.METRIC_INNER_PRODUCT)
-    index.hnsw.efConstruction = CONFIG["ef_construction"]
-    index.add(corpus)
-    index.hnsw.efSearch = cfg.EF_SEARCH
-
-    q = normalized(embed_titles(model_key, titles))
-    _, retrieved = index.search(q, cfg.K_MAX)   # top-K_MAX filas por consulta
-
-    n = len(titles)
-    success = {k: 0 for k in K_LIST}
-    rr_sum = 0.0
-    for i in range(n):
-        row = retrieved[i]
-        pos = np.where(row == target_rows[i])[0]
-        rank = pos[0] + 1 if len(pos) else None
-        if rank is not None:
-            rr_sum += 1.0 / rank
-            for k in K_LIST:
-                if rank <= k:
-                    success[k] += 1
-
-    res = {"model": model_key}
-    for k in K_LIST:
-        res[f"recall@{k}"] = round(success[k] / n, 4)
-    res["mrr"] = round(rr_sum / n, 4)
+def rank_metrics(ranks, n):
+    """Rango 1-based del documento relevante; 0 si no aparece. Métricas truncadas en K_MAX."""
+    in_top = (ranks > 0) & (ranks <= cfg.K_MAX)
+    res = {f"recall@{k}": ((ranks > 0) & (ranks <= k)).mean() for k in cfg.K_VALUES}
+    rr = np.zeros(n)
+    rr[in_top] = 1.0 / ranks[in_top]
+    res["mrr@10"] = rr.mean()
     return res
 
 
+def exact_ranks(corpus, q, targets):
+    """Rango completo del documento relevante y similitudes, por búsqueda exhaustiva."""
+    scores = q @ corpus.T
+    own = scores[np.arange(len(q)), targets]
+    ranks = (scores > own[:, None]).sum(axis=1) + 1
+    return ranks, own, scores.max(axis=1)
+
+
+def hnsw_ranks(corpus, q, targets, ref, seed):
+    index, perm, _ = _bench.build_index(corpus, ref["M"], ref["ef_construction"], seed)
+    index.hnsw.efSearch = ref["ef_search"]
+    _, found = index.search(q, cfg.K_MAX)
+    retrieved = np.where(found >= 0, perm[found], -1)
+    ranks = np.zeros(len(q), dtype=np.int32)
+    for i, row in enumerate(retrieved):
+        pos = np.where(row == targets[i])[0]
+        if len(pos):
+            ranks[i] = pos[0] + 1
+    return ranks
+
+
 def main():
-    titles, target_rows = load_sample()
-    print(f"Muestra: {len(titles)} consultas title->abstract "
-          f"(seed={SAMPLE_SEED}). Ejemplos de título-consulta:")
+    ref = cfg.load_reference()
+    titles, targets = load_sample()
+    n = len(titles)
+    print(f"Muestra: {n} consultas title->abstract. Dispositivo: {DEVICE}. Ejemplos:")
     for t in titles[:3]:
         print("   -", (t[:80] + "...") if len(t) > 80 else t)
-    print()
 
     rows = []
-    for m in cfg.MODELS:
-        print(f"=== {m} ===")
-        res = evaluate(m, titles, target_rows)
-        rows.append(res)
-        print(f"  R@1={res['recall@1']:.3f}  R@5={res['recall@5']:.3f}  "
-              f"R@10={res['recall@10']:.3f}  MRR={res['mrr']:.3f}\n")
+    for model in cfg.available_models():
+        print(f"\n=== {model} ===", flush=True)
+        q = normalized(title_embeddings(model, titles))
+        corpus = normalized(np.load(cfg.corpus_emb_path(model)))
 
-    df = pd.DataFrame(rows)
+        faiss.omp_set_num_threads(cfg.BUILD_THREADS)
+        rank_exact, sim_own, sim_top = exact_ranks(corpus, q, targets)
+        rank_hnsw = np.stack([hnsw_ranks(corpus, q, targets, ref, cfg.SEED + b)
+                              for b in range(N_BUILDS)])
+        np.savez_compressed(cfg.natural_ranks_path(model), exact=rank_exact, hnsw=rank_hnsw)
+
+        exact = rank_metrics(rank_exact, n)
+        rows.append({"model": model, "search": "exact", **exact,
+                     "median_rank": float(np.median(rank_exact)),
+                     "sim_own": sim_own.mean(), "sim_top1": sim_top.mean(),
+                     "own_is_top1": (rank_exact == 1).mean()})
+
+        per_build = pd.DataFrame([rank_metrics(r, n) for r in rank_hnsw])
+        rows.append({"model": model, "search": "hnsw", **per_build.mean().to_dict(),
+                     **per_build.std(ddof=1).add_suffix("_sd").to_dict()})
+
+        print(f"  exacta: R@1={exact['recall@1']:.3f} R@5={exact['recall@5']:.3f} "
+              f"R@10={exact['recall@10']:.3f} MRR@10={exact['mrr@10']:.3f} "
+              f"| sim propio={sim_own.mean():.3f} top-1={sim_top.mean():.3f} "
+              f"rango mediano={np.median(rank_exact):.0f}")
+        print(f"  HNSW  : R@10={per_build['recall@10'].mean():.3f} +- {per_build['recall@10'].std(ddof=1):.3f} "
+              f"MRR@10={per_build['mrr@10'].mean():.3f}", flush=True)
+
+    df = pd.DataFrame(rows).round(4)
     df.to_csv(cfg.RESULTS_DIR / "natural_queries.csv", index=False)
-
-    lines = ["Known-item title->abstract (O4) — mejor config: coseno, M=32, "
-             f"ef_c=400, ef_search={cfg.EF_SEARCH}, n={len(titles)}", ""]
-    lines += [df.to_string(index=False)]
-    (cfg.RESULTS_DIR / "natural_queries.txt").write_text("\n".join(lines), encoding="utf-8")
-    print("Guardado en results/natural_queries.csv y .txt")
+    print("\nGuardado en results/natural_queries.csv")
 
 
 if __name__ == "__main__":

@@ -1,110 +1,180 @@
 """
-FASE B.6 — Escalabilidad: latencia HNSW vs. búsqueda exacta según tamaño (local, CPU)
+FASE B.7 — Escalabilidad: latencia HNSW vs. búsqueda exacta según tamaño (local, CPU)
 =====================================================================================
 
-Responde a la observación O9 de la revisión: el estudio usa 49\,000 documentos, un
-tamaño modesto, y la ventaja de HNSW sobre la búsqueda exacta ---cuya complejidad
-es O(N·d) frente a O(log N)--- solo se vuelve dramática al crecer el corpus.
+Mide, para subconjuntos ANIDADOS y reproducibles de un pool grande de vectores, la
+latencia por consulta de la búsqueda exacta (IndexFlatIP) y de HNSW con M y
+ef_construction de la configuración de referencia.
 
-Aquí medimos, sobre la mejor configuración (SciBERT, coseno, M=32,
-ef_construction=400, ef_search=50), la latencia por consulta de HNSW y de la
-búsqueda exacta (IndexFlatIP) para subconjuntos ANIDADOS y reproducibles del
-corpus. Como solo disponemos de 49\,000 embeddings, el barrido llega hasta ese
-tamaño; el objetivo es exhibir la diferencia de pendiente (lineal vs. logarítmica),
-no un tamaño de producción.
+Tres cuidados que la primera versión no tenía:
+  - Las consultas se quitan del pool: su proporción variaba con N y falseaba la curva.
+  - La latencia principal es de 1 hilo y una consulta a la vez. La de lote con varios
+    hilos se mide aparte: ahí la exacta aprovecha BLAS y el tiempo por consulta ya no
+    representa lo que espera un usuario. Es lo que hacía parecer que la exacta ganaba
+    hasta unas 60 000 filas.
+  - Con ef_search fijo el recall cae al crecer N, así que comparar latencias no es
+    justo. HNSW se barre en ef_search y se compara también a recall constante.
 
-Para cada N medimos además el Recall@10 de HNSW frente a la búsqueda exacta sobre
-ese mismo subconjunto, para comprobar que la exactitud no se degrada al crecer N.
+Cada tamaño se construye N_BUILDS veces (una sola desde LARGE_N, por su costo). Se ajusta
+la pendiente log-log de cada curva.
 
-Salida: results/scalability.csv (una fila por tamaño).
+Salida (results/):
+  scalability_{modelo}.csv          por N y ef_search (tiempos: mediana; recall: media)
+  scalability_targets_{modelo}.csv  por N y objetivo de recall: ef_search necesario,
+                                    latencia, ventaja sobre la exacta
+  scalability_fit_{modelo}.csv      pendientes log-log con IC 95 %
+
+Uso: python 10_scalability.py --model scibert
 """
 
+import argparse
 import time
 import numpy as np
 import pandas as pd
 import faiss
+from scipy.stats import linregress, t as t_dist
 
 import config as cfg
 from importlib import import_module
 
 _bench = import_module("04_benchmark")
+build_index = _bench.build_index
+search_timed = _bench.search_timed
 normalized = _bench.normalized
-recall_at_k = _bench.recall_at_k
 
-MODEL = "scibert"
-M, EF_C = 32, 400
-N_REPEATS = 5
-
-# Si existe el pool de escalabilidad (100k, generado por colab_embed_scale.py) lo
-# usamos y extendemos la curva; si no, caemos a los 49k del experimento principal.
-SCALE_PATH = cfg.DATA_DIR / "corpus_scibert_scale.npy"
+N_BUILDS = 3
+LARGE_N = 500_000
+BATCH_THREADS = 12      # hilos lógicos del i5-11400H, los que usa FAISS por defecto
+N_EXACT_QUERIES = 200   # la exacta es estable y lenta: no hacen falta las 1 000
+GRID = [5_000, 10_000, 20_000, 50_000, 100_000, 200_000, 500_000, 1_000_000]
+EF_GRID = [10, 20, 30, 50, 75, 100, 150, 200, 300, 400, 600, 800]
 
 
-def latency_ms(index, queries):
-    """Latencia media por consulta (ms), con warm-up y promedio de N_REPEATS."""
-    index.search(queries, cfg.K_MAX)  # warm-up
-    times = []
-    for _ in range(N_REPEATS):
-        t0 = time.perf_counter()
-        _, ret = index.search(queries, cfg.K_MAX)
-        times.append(time.perf_counter() - t0)
-    return np.mean(times) / len(queries) * 1000, ret
+def load_vectors(model):
+    """Vectores del pool y sus metadatos. Con tramos de Colab, reserva una sola vez."""
+    folder = cfg.DATA_DIR / f"scale_{model}"
+    if folder.exists():
+        parts = sorted(folder.glob(f"part_{model}_*.npy"))
+        sizes = [np.load(p, mmap_mode="r").shape for p in parts]
+        emb = np.empty((sum(s[0] for s in sizes), sizes[0][1]), dtype=np.float32)
+        start = 0
+        for part, size in zip(parts, sizes):
+            emb[start:start + size[0]] = np.load(part)
+            start += size[0]
+        meta = pd.read_parquet(folder / f"corpus_{model}_scale_meta.parquet").iloc[:len(emb)]
+        return emb, meta
+    return (np.load(cfg.DATA_DIR / f"corpus_{model}_scale.npy").astype(np.float32),
+            pd.read_parquet(cfg.DATA_DIR / "corpus_scale_meta.parquet"))
 
 
-def main():
-    if SCALE_PATH.exists():
-        corpus = normalized(np.load(SCALE_PATH))
-        print(f"Usando pool de escalabilidad: {corpus.shape[0]:,} vectores")
-    else:
-        corpus = normalized(np.load(cfg.corpus_emb_path(MODEL)))
-        print(f"Pool de 100k no encontrado; usando el corpus de {corpus.shape[0]:,}")
-    queries = normalized(np.load(cfg.query_emb_path(MODEL)))
+def load_pool(model):
+    """Pool normalizado y barajado, sin las consultas del experimento."""
+    emb, meta = load_vectors(model)
+    keep = ~meta["id"].astype(str).isin(set(cfg.read_ids(cfg.query_ids_path()))).to_numpy()
+    print(f"Pool {model}: {len(emb):,} vectores, {(~keep).sum()} consultas retiradas", flush=True)
+    if not keep.all():
+        emb = emb[keep]
+    faiss.normalize_L2(emb)
+    # Barajar en el sitio: los prefijos son subconjuntos anidados sin copiar el pool
+    np.random.default_rng(cfg.SEED).shuffle(emb, axis=0)
+    return emb
+
+
+def batch_ms(index, queries):
+    """Tiempo por consulta buscando todas juntas con todos los hilos."""
+    faiss.omp_set_num_threads(BATCH_THREADS)
+    t0 = time.perf_counter()
+    index.search(queries, cfg.K_MAX)
+    elapsed = time.perf_counter() - t0
+    faiss.omp_set_num_threads(cfg.BUILD_THREADS)
+    return elapsed / len(queries) * 1000
+
+
+def slope_row(model, curve, n, latency):
+    fit = linregress(np.log(n), np.log(latency))
+    half = t_dist.ppf(0.975, len(n) - 2) * fit.stderr if len(n) > 2 else float("nan")
+    return {"model": model, "curve": curve, "n_points": len(n), "slope": fit.slope,
+            "ci95_low": fit.slope - half, "ci95_high": fit.slope + half, "r2": fit.rvalue ** 2}
+
+
+def run(model):
+    ref = cfg.load_reference()
+    corpus = load_pool(model)
+    queries = normalized(np.load(cfg.query_emb_path(model)))
     d = corpus.shape[1]
 
-    # Tamaños hasta el máximo disponible
-    grid = [5_000, 10_000, 20_000, 35_000, 49_000, 75_000, 100_000]
-    N_LIST = [n for n in grid if n <= len(corpus)]
-    if len(corpus) not in N_LIST:
-        N_LIST.append(len(corpus))
+    n_list = [n for n in GRID if n <= len(corpus)]
+    if len(corpus) not in n_list:
+        n_list.append(len(corpus))
 
-    # Orden aleatorio fijo -> subconjuntos anidados y reproducibles
-    order = np.random.default_rng(cfg.SEED).permutation(len(corpus))
+    rows, exact_rows = [], []
+    for N in n_list:
+        sub = corpus[:N]
 
-    rows = []
-    for N in N_LIST:
-        sub = np.ascontiguousarray(corpus[order[:N]])
-
-        # Búsqueda exacta (verdad de referencia a este tamaño)
         flat = faiss.IndexFlatIP(d)
         flat.add(sub)
-        exact_ms, exact_ret = latency_ms(flat, queries)
+        faiss.omp_set_num_threads(cfg.BUILD_THREADS)
+        _, truth = flat.search(queries, cfg.K_MAX)   # verdad a este tamaño
+        _, times = search_timed(flat, queries[:N_EXACT_QUERIES], cfg.K_MAX)
+        exact_rows.append({"N": N, "exact_ms": times.mean(), "exact_p95_ms": np.percentile(times, 95),
+                           "exact_batch_ms": batch_ms(flat, queries)})
+        del flat
 
-        # HNSW
-        hnsw = faiss.IndexHNSWFlat(d, M, faiss.METRIC_INNER_PRODUCT)
-        hnsw.hnsw.efConstruction = EF_C
-        hnsw.add(sub)
-        hnsw.hnsw.efSearch = cfg.EF_SEARCH
-        hnsw_ms, hnsw_ret = latency_ms(hnsw, queries)
+        for build in range(1 if N >= LARGE_N else N_BUILDS):
+            index, perm, build_t = build_index(sub, ref["M"], ref["ef_construction"], cfg.SEED + build)
+            size_mb = _bench.index_size_mb(index)
+            for ef_s in EF_GRID:
+                metrics, _ = _bench.evaluate(index, perm, queries, truth, ef_s)
+                rows.append({"N": N, "ef_search": ef_s, "build": build, "build_time_s": build_t,
+                             "index_mb": size_mb, "latency_ms": metrics["latency_ms"],
+                             "latency_p95_ms": metrics["latency_p95_ms"],
+                             "latency_batch_ms": batch_ms(index, queries),
+                             "recall@10": metrics["recall@10"]})
+            del index
+        print(f"N={N:>9,} | exacta={times.mean():8.3f} ms | construcción={build_t:7.1f} s "
+              f"| {size_mb:7.0f} MB", flush=True)
 
-        recall = recall_at_k(hnsw_ret, exact_ret, 10)
-        speedup = exact_ms / hnsw_ms if hnsw_ms else float("nan")
+    raw = pd.DataFrame(rows)
+    grouped = raw.groupby(["N", "ef_search"])
+    table = pd.concat([
+        grouped[["build_time_s", "latency_ms", "latency_p95_ms", "latency_batch_ms"]].median(),
+        grouped[["index_mb", "recall@10"]].mean(),
+        grouped[["recall@10"]].std(ddof=1).add_suffix("_sd"),
+    ], axis=1).reset_index().merge(pd.DataFrame(exact_rows), on="N")
+    table.round(4).to_csv(cfg.RESULTS_DIR / f"scalability_{model}.csv", index=False)
 
-        row = {
-            "N": N,
-            "exact_ms": round(exact_ms, 4),
-            "hnsw_ms": round(hnsw_ms, 4),
-            "speedup": round(speedup, 2),
-            "recall@10": round(recall, 4),
-        }
-        rows.append(row)
-        print(f"N={N:6d} | exacta={row['exact_ms']:.3f}ms  HNSW={row['hnsw_ms']:.3f}ms  "
-              f"speedup={row['speedup']:.1f}x  R@10={row['recall@10']:.3f}")
+    targets = []
+    for target in cfg.RECALL_TARGETS:
+        for N, group in table.groupby("N"):
+            ok = group[group["recall@10"] >= target].sort_values("ef_search")
+            if ok.empty:
+                targets.append({"N": N, "target": target})
+                continue
+            r = ok.iloc[0]
+            targets.append({"N": N, "target": target, "ef_search": int(r["ef_search"]),
+                            "recall@10": r["recall@10"], "hnsw_ms": r["latency_ms"],
+                            "hnsw_p95_ms": r["latency_p95_ms"], "exact_ms": r["exact_ms"],
+                            "speedup": r["exact_ms"] / r["latency_ms"],
+                            "hnsw_batch_ms": r["latency_batch_ms"], "exact_batch_ms": r["exact_batch_ms"],
+                            "speedup_batch": r["exact_batch_ms"] / r["latency_batch_ms"],
+                            "build_time_s": r["build_time_s"], "index_mb": r["index_mb"]})
+    targets = pd.DataFrame(targets)
+    targets.round(4).to_csv(cfg.RESULTS_DIR / f"scalability_targets_{model}.csv", index=False)
 
-    df = pd.DataFrame(rows)
-    out = cfg.RESULTS_DIR / "scalability.csv"
-    df.to_csv(out, index=False)
-    print(f"\nResultados guardados en {out}")
+    exact = pd.DataFrame(exact_rows)
+    fits = [slope_row(model, "exact", exact["N"].to_numpy(float), exact["exact_ms"].to_numpy())]
+    for target in cfg.RECALL_TARGETS:
+        cur = targets[(targets["target"] == target) & targets["hnsw_ms"].notna()]
+        if len(cur) == len(exact):
+            fits.append(slope_row(model, f"hnsw@{target}", cur["N"].to_numpy(float), cur["hnsw_ms"].to_numpy()))
+    fits = pd.DataFrame(fits)
+    fits.round(4).to_csv(cfg.RESULTS_DIR / f"scalability_fit_{model}.csv", index=False)
+
+    print("\n" + targets.round(3).to_string(index=False))
+    print("\n" + fits.round(3).to_string(index=False))
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--model", default="scibert", choices=list(cfg.ALL_MODELS))
+    run(parser.parse_args().model)

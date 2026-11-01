@@ -1,165 +1,164 @@
 """
-FASE B.4 — Pruebas de significancia estadística SciBERT vs. E5-large (local, CPU)
-================================================================================
+FASE B.6 — Pruebas de significancia entre modelos (local)
+=========================================================
 
-Responde a la observación O3 de la revisión por pares: el paper afirma que
-SciBERT supera a E5-large (Recall@10 0,998 vs 0,995) pero no verifica si esa
-diferencia de 0,003 es estadísticamente significativa o ruido muestral.
+Compara pares de modelos sobre los mismos textos, por lo que las pruebas son pareadas y
+la unidad es la consulta. Corre después de 09 (y de 13 si hay modelos adicionales).
 
-Comparamos la MEJOR configuración de cada modelo (ambas coseno, M=32,
-ef_construction=400, ef_search=50), reconstruyendo los índices y extrayendo el
-resultado CONSULTA A CONSULTA (las 1 000 consultas son las mismas para ambos
-modelos, por lo que la comparación es pareada).
+Fidelidad abstract->abstract, en la configuración de referencia. Cada modelo tiene su
+propio ground truth, así que se compara cuánto se aleja HNSW de la búsqueda exacta en
+el espacio de cada modelo:
+  - Wilcoxon de rangos con signo sobre el Recall@10 por consulta, promediado entre las
+    construcciones del índice para no confundir la variación entre consultas con la
+    variación entre construcciones.
+  - McNemar exacto sobre el acierto binario Recall@10 == 1,0, en cada construcción. Se
+    informan los pares discordantes y se toma el mayor valor p, el caso conservador.
 
-Matiz metodológico: cada modelo tiene su propio ground truth exacto (el vecino
-"verdadero" depende del espacio de embeddings). Por tanto Recall@10 mide, para
-cada modelo, la fidelidad de HNSW respecto a su propia búsqueda exacta. La prueba
-compara esas dos fidelidades sobre el mismo conjunto de consultas.
+Recuperación título->abstract, con búsqueda exacta (el límite de cada modelo):
+  - McNemar exacto sobre "el abstract relevante está en el top-10".
+  - Wilcoxon de rangos con signo sobre el rango recíproco en el top-10.
 
-Tests (los sugeridos por el revisor):
-  1. McNemar pareado sobre el acierto binario Recall@10 == 1,0 (recall perfecto).
-     -> apropiado para tasas de acierto binarias; usamos la versión exacta
-        (binomial) porque los pares discordantes pueden ser pocos.
-  2. Wilcoxon de rangos con signo sobre el rango recíproco por consulta (base del
-     MRR) y sobre el Recall@10 por consulta (fraccional).
-Se reporta estadístico, valor p bilateral y tamaño del efecto.
+Wilcoxon descarta los pares sin diferencia (se informa cuántos quedan). El tamaño de
+efecto es la correlación biserial de rangos, con rangos promedio en los empates. Además
+se da el IC 95 % de la diferencia media por bootstrap pareado sobre consultas, y los
+valores p se corrigen por Holm sobre toda la familia de pruebas.
 
-Salida: imprime el informe en consola y guarda results/significance.txt
+Salida: results/significance.csv y results/significance.txt
 """
 
 import numpy as np
-import faiss
-from scipy.stats import wilcoxon, binomtest
+import pandas as pd
+from scipy.stats import wilcoxon, binomtest, rankdata
 
 import config as cfg
-from importlib import import_module
 
-_bench = import_module("04_benchmark")
-normalized = _bench.normalized
-
-# Mejor configuración de cada modelo (idéntica salvo el modelo)
-CONFIG = {"metric": "cosine", "M": 32, "ef_construction": 400}
-MODELS = ["scibert", "e5"]
-K = 10   # evaluamos Recall@10 y el rango del vecino más cercano dentro del top-K_MAX
-
-
-def retrieve(model):
-    """Reconstruye el índice de la mejor config del modelo y devuelve, por
-    consulta: el vector de Recall@10 y el rango recíproco del vecino verdadero."""
-    corpus = normalized(np.load(cfg.corpus_emb_path(model)))
-    queries = normalized(np.load(cfg.query_emb_path(model)))
-    truth = np.load(cfg.groundtruth_path(model, CONFIG["metric"]))
-
-    d = corpus.shape[1]
-    index = faiss.IndexHNSWFlat(d, CONFIG["M"], faiss.METRIC_INNER_PRODUCT)
-    index.hnsw.efConstruction = CONFIG["ef_construction"]
-    index.add(corpus)
-    index.hnsw.efSearch = cfg.EF_SEARCH
-    _, retrieved = index.search(queries, cfg.K_MAX)
-
-    n = len(queries)
-    recall10 = np.empty(n)
-    rr = np.empty(n)   # reciprocal rank del vecino más cercano verdadero
-    for i in range(n):
-        r, t = retrieved[i], truth[i]
-        recall10[i] = len(set(r[:K]) & set(t[:K])) / K
-        true_nn = t[0]
-        pos = np.where(r == true_nn)[0]
-        rr[i] = 1.0 / (pos[0] + 1) if len(pos) else 0.0
-    return recall10, rr
+# Pares de interés: cada uno aísla un factor cuando los dos modelos están disponibles
+PAIRS = [
+    ("scibert", "e5"),        # el contraste original
+    ("scibert", "scincl"),    # objetivo de entrenamiento: SciNCL parte de SciBERT
+    ("scibert", "specter2"),  # objetivo de entrenamiento, con adaptador de consulta
+    ("bert", "scibert"),      # dominio, sin entrenamiento para recuperación
+    ("scincl", "e5_base"),    # dominio, con entrenamiento para similitud
+    ("e5_base", "e5"),        # dimensión, misma familia
+]
+N_BOOTSTRAP = 10_000
+ALPHA = 0.05
 
 
 def mcnemar_exact(succ_a, succ_b):
-    """McNemar exacto sobre aciertos binarios pareados.
-    b = A acierta y B falla; c = A falla y B acierta.
-    H0: prob(discordancia a favor de A) = 0,5."""
+    """McNemar exacto. b = A acierta y B falla; c = A falla y B acierta."""
     b = int(np.sum(succ_a & ~succ_b))
     c = int(np.sum(~succ_a & succ_b))
-    res = binomtest(b, b + c, 0.5, alternative="two-sided") if (b + c) > 0 else None
-    p = res.pvalue if res is not None else 1.0
+    p = binomtest(b, b + c, 0.5, alternative="two-sided").pvalue if (b + c) > 0 else 1.0
     return b, c, p
 
 
 def rank_biserial(x, y):
-    """Tamaño del efecto para Wilcoxon pareado: correlación biserial de rangos."""
+    """Tamaño del efecto para Wilcoxon pareado, con rangos promedio en los empates."""
     d = x - y
     d = d[d != 0]
     if len(d) == 0:
         return 0.0
-    ranks = np.argsort(np.argsort(np.abs(d))) + 1
-    r_plus = np.sum(ranks[d > 0])
-    r_minus = np.sum(ranks[d < 0])
-    total = r_plus + r_minus
-    return (r_plus - r_minus) / total
+    ranks = rankdata(np.abs(d))
+    r_plus = ranks[d > 0].sum()
+    r_minus = ranks[d < 0].sum()
+    return (r_plus - r_minus) / (r_plus + r_minus)
+
+
+def bootstrap_ci(x, y):
+    """IC 95 % percentil de la diferencia media, remuestreando consultas."""
+    d = x - y
+    rng = np.random.default_rng(cfg.SEED)
+    idx = rng.integers(0, len(d), size=(N_BOOTSTRAP, len(d)))
+    means = d[idx].mean(axis=1)
+    return np.percentile(means, 2.5), np.percentile(means, 97.5)
+
+
+def wilcoxon_row(scenario, metric, a, b, x, y):
+    n_nonzero = int(np.sum(x != y))
+    stat, p = wilcoxon(x, y) if n_nonzero else (np.nan, 1.0)
+    low, high = bootstrap_ci(x, y)
+    return {"scenario": scenario, "metric": metric, "test": "wilcoxon", "model_a": a, "model_b": b,
+            "mean_a": x.mean(), "mean_b": y.mean(), "diff": x.mean() - y.mean(),
+            "ci95_low": low, "ci95_high": high, "n_nonzero": n_nonzero, "statistic": stat,
+            "effect_rank_biserial": rank_biserial(x, y), "p": p}
+
+
+def mcnemar_row(scenario, metric, a, b, succ_a, succ_b):
+    """succ_* con forma (construcciones, consultas) o (consultas,)."""
+    succ_a, succ_b = np.atleast_2d(succ_a), np.atleast_2d(succ_b)
+    runs = [mcnemar_exact(sa, sb) for sa, sb in zip(succ_a, succ_b)]
+    worst = max(runs, key=lambda r: r[2])
+    return {"scenario": scenario, "metric": metric, "test": "mcnemar", "model_a": a, "model_b": b,
+            "mean_a": succ_a.mean(), "mean_b": succ_b.mean(), "diff": succ_a.mean() - succ_b.mean(),
+            "discordant_ab": worst[0], "discordant_ba": worst[1],
+            "discordant_ab_range": f"{min(r[0] for r in runs)}-{max(r[0] for r in runs)}",
+            "discordant_ba_range": f"{min(r[1] for r in runs)}-{max(r[1] for r in runs)}",
+            "p": worst[2]}
+
+
+def holm(pvalues):
+    """Valores p ajustados por Holm."""
+    p = np.asarray(pvalues, dtype=float)
+    order = np.argsort(p)
+    adjusted = np.empty(len(p))
+    running = 0.0
+    for rank, i in enumerate(order):
+        running = max(running, (len(p) - rank) * p[i])
+        adjusted[i] = min(running, 1.0)
+    return adjusted
+
+
+def load_fidelity():
+    data = dict(np.load(cfg.perquery_path()))
+    if cfg.perquery_extra_path().exists():
+        data.update(np.load(cfg.perquery_extra_path()))
+    return data
 
 
 def main():
-    r10, rr = {}, {}
-    for m in MODELS:
-        r10[m], rr[m] = retrieve(m)
+    ref = cfg.load_reference()
+    tag = f"{ref['M']}_{ref['ef_construction']}_{ref['ef_search']}"
+    fidelity = load_fidelity()
 
-    a, b = MODELS  # "scibert", "e5"
-    lines = []
+    rows = []
+    for a, b in PAIRS:
+        ka, kb = f"{a}_{tag}_r10", f"{b}_{tag}_r10"
+        if ka in fidelity and kb in fidelity:
+            ha, hb = fidelity[ka], fidelity[kb]
+            rows.append(wilcoxon_row("abstract-abstract", "recall@10", a, b,
+                                     ha.mean(axis=0) / cfg.K_MAX, hb.mean(axis=0) / cfg.K_MAX))
+            rows.append(mcnemar_row("abstract-abstract", "recall@10=1", a, b,
+                                    ha == cfg.K_MAX, hb == cfg.K_MAX))
 
-    def out(s=""):
-        print(s)
-        lines.append(s)
+        if cfg.natural_ranks_path(a).exists() and cfg.natural_ranks_path(b).exists():
+            ra = np.load(cfg.natural_ranks_path(a))["exact"]
+            rb = np.load(cfg.natural_ranks_path(b))["exact"]
+            rows.append(mcnemar_row("title-abstract", "hit@10", a, b, ra <= cfg.K_MAX, rb <= cfg.K_MAX))
+            rra = np.where(ra <= cfg.K_MAX, 1.0 / ra, 0.0)
+            rrb = np.where(rb <= cfg.K_MAX, 1.0 / rb, 0.0)
+            rows.append(wilcoxon_row("title-abstract", "rr@10", a, b, rra, rrb))
 
-    out("=" * 70)
-    out("O3 — Significancia estadística: SciBERT vs. E5-large")
-    out(f"Config: coseno, M={CONFIG['M']}, ef_c={CONFIG['ef_construction']}, "
-        f"ef_search={cfg.EF_SEARCH} | n={len(r10[a])} consultas (pareadas)")
-    out("=" * 70)
+    df = pd.DataFrame(rows)
+    df["p_holm"] = holm(df["p"])
+    df["significant"] = df["p_holm"] < ALPHA
+    df.round(6).to_csv(cfg.RESULTS_DIR / "significance.csv", index=False)
 
-    out(f"\nRecall@10 medio:  SciBERT={r10[a].mean():.4f}   E5-large={r10[b].mean():.4f}"
-        f"   (dif={r10[a].mean()-r10[b].mean():+.4f})")
-    out(f"MRR medio:        SciBERT={rr[a].mean():.4f}   E5-large={rr[b].mean():.4f}"
-        f"   (dif={rr[a].mean()-rr[b].mean():+.4f})")
-
-    # --- Test 1: McNemar sobre Recall@10 perfecto (binario) ---
-    succ_a = r10[a] >= 1.0
-    succ_b = r10[b] >= 1.0
-    bb, cc, p_mc = mcnemar_exact(succ_a, succ_b)
-    out("\n--- McNemar exacto (acierto = Recall@10 perfecto por consulta) ---")
-    out(f"Consultas con Recall@10=1,0:  SciBERT={int(succ_a.sum())}   "
-        f"E5-large={int(succ_b.sum())}")
-    out(f"Pares discordantes: b (SciBERT sí, E5 no)={bb}   "
-        f"c (SciBERT no, E5 sí)={cc}")
-    out(f"p-valor bilateral (binomial exacto) = {p_mc:.4f}")
-
-    # --- Test 2: Wilcoxon sobre Recall@10 fraccional ---
-    diff_r10 = r10[a] - r10[b]
-    if np.any(diff_r10 != 0):
-        w_r10, p_r10 = wilcoxon(r10[a], r10[b])
-        es_r10 = rank_biserial(r10[a], r10[b])
-    else:
-        w_r10, p_r10, es_r10 = float("nan"), 1.0, 0.0
-    out("\n--- Wilcoxon rangos con signo (Recall@10 por consulta) ---")
-    out(f"W={w_r10:.1f}   p-valor bilateral={p_r10:.4f}   "
-        f"tamaño de efecto (rank-biserial)={es_r10:+.3f}")
-
-    # --- Test 3: Wilcoxon sobre rango recíproco (MRR) ---
-    diff_rr = rr[a] - rr[b]
-    if np.any(diff_rr != 0):
-        w_rr, p_rr = wilcoxon(rr[a], rr[b])
-        es_rr = rank_biserial(rr[a], rr[b])
-    else:
-        w_rr, p_rr, es_rr = float("nan"), 1.0, 0.0
-    out("\n--- Wilcoxon rangos con signo (rango recíproco / MRR por consulta) ---")
-    out(f"W={w_rr:.1f}   p-valor bilateral={p_rr:.4f}   "
-        f"tamaño de efecto (rank-biserial)={es_rr:+.3f}")
-
-    # --- Veredicto ---
-    out("\n" + "=" * 70)
-    alpha = 0.05
-    sig_r10 = p_r10 < alpha
-    out(f"Con alpha={alpha}: la diferencia en Recall@10 es "
-        f"{'SIGNIFICATIVA' if sig_r10 else 'NO significativa'}.")
-    out("=" * 70)
-
-    out_path = cfg.RESULTS_DIR / "significance.txt"
-    out_path.write_text("\n".join(lines), encoding="utf-8")
-    print(f"\nInforme guardado en {out_path}")
+    lines = [f"Pruebas pareadas en la configuración de referencia {ref} "
+             f"(alpha={ALPHA}, Holm sobre {len(df)} pruebas)", ""]
+    for _, r in df.iterrows():
+        head = f"{r['scenario']:18s} {r['metric']:12s} {r['model_a']} vs {r['model_b']}: " \
+               f"{r['mean_a']:.4f} vs {r['mean_b']:.4f}"
+        if r["test"] == "wilcoxon":
+            body = f"Wilcoxon W={r['statistic']:.1f} n={int(r['n_nonzero'])} " \
+                   f"r={r['effect_rank_biserial']:+.3f} IC95=[{r['ci95_low']:+.4f}, {r['ci95_high']:+.4f}]"
+        else:
+            body = f"McNemar b={r['discordant_ab_range']} c={r['discordant_ba_range']}"
+        lines.append(f"{head} | {body} | p={r['p']:.2e} p_holm={r['p_holm']:.2e}"
+                     f"{' *' if r['significant'] else ''}")
+    report = "\n".join(lines)
+    print(report)
+    (cfg.RESULTS_DIR / "significance.txt").write_text(report, encoding="utf-8")
 
 
 if __name__ == "__main__":

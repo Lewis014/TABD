@@ -1,0 +1,5 @@
+model,device,text,n,cpu_threads,encode_ms,encode_p95_ms,search_ms,search_p95_ms,total_ms,total_p95_ms,encode_share
+scibert,cpu,title,200,6,45.0075,53.6333,0.5652,0.825,45.5727,54.2605,0.9876
+scibert,cpu,abstract,200,6,172.8507,314.4065,0.6906,0.9741,173.5412,315.1476,0.996
+e5,cpu,title,200,6,200.5489,233.2346,1.1424,1.6826,201.6913,234.2643,0.9943
+e5,cpu,abstract,200,6,620.9103,1071.9811,1.0123,1.4645,621.9226,1072.8822,0.9984

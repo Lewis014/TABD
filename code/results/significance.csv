@@ -1,0 +1,5 @@
+scenario,metric,test,model_a,model_b,mean_a,mean_b,diff,ci95_low,ci95_high,n_nonzero,statistic,effect_rank_biserial,p,discordant_ab,discordant_ba,discordant_ab_range,discordant_ba_range,p_holm,significant
+abstract-abstract,recall@10,wilcoxon,scibert,e5,0.99704,0.9922,0.00484,0.00316,0.00668,223.0,6870.0,0.449872,0.0,,,,,0.0,True
+abstract-abstract,recall@10=1,mcnemar,scibert,e5,0.9732,0.9322,0.041,,,,,,0.003462,61.0,32.0,61-73,21-32,0.003462,True
+title-abstract,hit@10,mcnemar,scibert,e5,0.173,0.949,-0.776,,,,,,0.0,1.0,777.0,1-1,777-777,0.0,True
+title-abstract,rr@10,wilcoxon,scibert,e5,0.09265,0.899306,-0.806657,-0.82788,-0.784753,888.0,576.5,-0.997079,0.0,,,,,0.0,True

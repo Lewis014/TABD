@@ -1,21 +1,22 @@
-\begin{table}[H]
-\caption{Análisis de sensibilidad de \textit{ef\_search} sobre la mejor
-configuración (SciBERT, coseno, $M=32$, \textit{ef\_construction}$=400$;
-49\,000 documentos, 1\,000 consultas). El índice se construye una sola vez y solo
-se varía \textit{ef\_search}. La fila \textit{ef\_search}$=50$ reproduce la
-Tabla~\ref{tab:resultados}.}\label{tab:efsearch}
+\begin{table}[tbp]
+\caption{Sensitivity to \textit{ef\_search} with $M=32$ and \textit{ef\_construction}$=100$ over 5 builds (latency per query, one thread).}\label{tab:efsearch}
 \centering
-\begin{tabular}{|c|c|c|c|c|c|}
+\begin{tabular}{|l|c|c|c|c|c|c|}
 \hline
-\textbf{\textit{ef\_search}} & \textbf{R@1} & \textbf{R@5} & \textbf{R@10} &
-\textbf{MRR} & \textbf{Lat. (ms)} \\
+\textbf{Model} & \textbf{\textit{ef\_s}} & \textbf{R@1} & \textbf{R@5} & \textbf{R@10} & \textbf{Lat. (ms)} & \textbf{p95 (ms)} \\
 \hline
-10  & 0,998 & 0,985 & 0,963 & 0,998 & 0,09 \\
-20  & 0,998 & 0,994 & 0,985 & 0,998 & 0,19 \\
-50  & 1,000 & 0,999 & \textbf{0,998} & 1,000 & 0,32 \\
-100 & 1,000 & 0,999 & 1,000 & 1,000 & 0,48 \\
-200 & 1,000 & 0,999 & 1,000 & 1,000 & 0,70 \\
-400 & 1,000 & 0,999 & 1,000 & 1,000 & 1,36 \\
+SciBERT & 10 & 0.897 & 0.856 & 0.825$\pm$0.003 & 0.14 & 0.21 \\
+SciBERT & 20 & 0.965 & 0.941 & 0.924$\pm$0.001 & 0.21 & 0.32 \\
+SciBERT & 50 & 0.995 & 0.990 & 0.985$\pm$0.001 & 0.40 & 0.71 \\
+SciBERT & 100 & 0.999 & 0.998 & 0.997$\pm$0.000 & 0.66 & 1.08 \\
+SciBERT & 200 & 1.000 & 0.999 & 0.999$\pm$0.000 & 1.14 & 1.87 \\
+SciBERT & 400 & 1.000 & 1.000 & 1.000$\pm$0.000 & 2.01 & 3.36 \\
+E5-large & 10 & 0.873 & 0.833 & 0.792$\pm$0.003 & 0.20 & 0.34 \\
+E5-large & 20 & 0.948 & 0.921 & 0.895$\pm$0.002 & 0.30 & 0.50 \\
+E5-large & 50 & 0.990 & 0.981 & 0.971$\pm$0.001 & 0.56 & 0.89 \\
+E5-large & 100 & 0.998 & 0.996 & 0.992$\pm$0.000 & 0.98 & 1.47 \\
+E5-large & 200 & 1.000 & 0.999 & 0.998$\pm$0.000 & 1.65 & 2.53 \\
+E5-large & 400 & 1.000 & 1.000 & 1.000$\pm$0.000 & 2.78 & 4.04 \\
 \hline
 \end{tabular}
 \end{table}

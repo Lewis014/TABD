@@ -1,0 +1,15 @@
+\begin{table}[tbp]
+\caption{Latency per query against corpus size (SciBERT, $M=32$, \textit{ef\_c}$=100$; one thread, one query at a time). HNSW uses the smallest \textit{ef\_search} reaching each Recall@10 target. Batch: speedup when all queries run together on all threads, at the 0.99 target.}\label{tab:escalabilidad_scibert}
+\centering
+\begin{tabular}{|r|c|c|c|c|c|c|c|c|c|c|}
+\hline
+\textbf{$N$} & \textbf{Exact (ms)} & \textbf{\textit{ef\_s}$_{0.95}$} & \textbf{ms} & \textbf{Gain} & \textbf{\textit{ef\_s}$_{0.99}$} & \textbf{ms} & \textbf{Gain} & \textbf{Batch} & \textbf{Build (s)} & \textbf{MB} \\
+\hline
+5,000 & 1.35 & 20 & 0.12 & 11$\times$ & 50 & 0.25 & 5$\times$ & 1.0$\times$ & 0.2 & 16 \\
+10,000 & 2.52 & 20 & 0.14 & 17$\times$ & 50 & 0.27 & 9$\times$ & 0.5$\times$ & 1.0 & 32 \\
+20,000 & 4.57 & 30 & 0.25 & 18$\times$ & 50 & 0.34 & 13$\times$ & 0.7$\times$ & 3.5 & 64 \\
+50,000 & 11.32 & 50 & 0.44 & 26$\times$ & 75 & 0.58 & 20$\times$ & 0.9$\times$ & 14.5 & 159 \\
+99,697 & 23.58 & 50 & 0.53 & 44$\times$ & 100 & 0.84 & 28$\times$ & 1.1$\times$ & 37.7 & 318 \\
+\hline
+\end{tabular}
+\end{table}

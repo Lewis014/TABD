@@ -1,0 +1,12 @@
+\begin{table}[tbp]
+\caption{Known-item retrieval title$\rightarrow$abstract over 1\,000 titles, with exact search and with HNSW ($M=32$, \textit{ef\_c}$=100$, \textit{ef\_s}$=100$). Similarities are between the title and its own abstract, and between the title and the top-ranked document.}\label{tab:naturales}
+\centering
+\begin{tabular}{|l|c|c|c|c|c|c|c|c|}
+\hline
+\textbf{Model} & \textbf{R@1} & \textbf{R@5} & \textbf{R@10} & \textbf{MRR@10} & \textbf{R@10$_{\mathrm{HNSW}}$} & \textbf{Sim. own} & \textbf{Sim. top} & \textbf{Med. rank} \\
+\hline
+SciBERT & 0.061 & 0.131 & 0.173 & 0.093 & 0.163 & 0.731 & 0.790 & 259 \\
+E5-large & 0.869 & 0.941 & 0.949 & 0.899 & 0.944 & 0.875 & 0.877 & 1 \\
+\hline
+\end{tabular}
+\end{table}

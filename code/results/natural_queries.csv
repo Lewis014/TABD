@@ -1,3 +1,5 @@
-model,recall@1,recall@5,recall@10,mrr
-scibert,0.074,0.152,0.194,0.1069
-e5,0.869,0.946,0.953,0.9021
+model,search,recall@1,recall@5,recall@10,mrr@10,median_rank,sim_own,sim_top1,own_is_top1,recall@1_sd,recall@5_sd,recall@10_sd,mrr@10_sd
+scibert,exact,0.061,0.131,0.173,0.0926,259.0,0.7306,0.7902,0.061,,,,
+scibert,hnsw,0.061,0.1243,0.1633,0.0898,,,,,0.0026,0.0012,0.0032,0.0023
+e5,exact,0.869,0.941,0.949,0.8993,1.0,0.8745,0.8773,0.869,,,,
+e5,hnsw,0.865,0.9363,0.9437,0.895,,,,,0.0035,0.0029,0.0023,0.0032

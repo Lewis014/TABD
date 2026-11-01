@@ -1,45 +1,48 @@
 """
-Figura de escalabilidad (O9): latencia por consulta vs. tamaño del corpus.
+Figura de escalabilidad: latencia por consulta vs. tamaño del corpus.
 
-Lee results/scalability.csv y produce ../Images/fig_scalability.png: dos curvas
-(búsqueda exacta y HNSW) frente a N. La exacta crece de forma aproximadamente
-lineal (O(N·d)); HNSW se mantiene casi plana (O(log N)). Se anota el speedup en
-el tamaño máximo.
+Lee results/scalability_targets_{modelo}.csv y produce ../Images/fig_scalability.png, en
+escala log-log, un panel por modelo con pool de escalabilidad: búsqueda exacta y HNSW a
+recall constante, de modo que la pendiente de cada recta se pueda leer directamente.
 
 Ejecutar:
     python 10b_plot_scalability.py
 """
 
-from pathlib import Path
 import pandas as pd
 import matplotlib.pyplot as plt
 
-CSV = Path(__file__).parent / "results" / "scalability.csv"
-IMAGES = Path(__file__).parent.parent / "Images"
-IMAGES.mkdir(exist_ok=True)
+import config as cfg
+import plot_style as ps
 
-df = pd.read_csv(CSV).sort_values("N")
+ps.apply()
+models = [m for m in cfg.ALL_MODELS
+          if (cfg.RESULTS_DIR / f"scalability_targets_{m}.csv").exists()]
 
-fig, ax = plt.subplots(figsize=(6.2, 4))
-ax.plot(df["N"], df["exact_ms"], marker="o", color="#d62728",
-        linewidth=1.8, markersize=7, label="Búsqueda exacta (IndexFlatIP)")
-ax.plot(df["N"], df["hnsw_ms"], marker="s", color="#1f77b4",
-        linewidth=1.8, markersize=7, label="HNSW (M=32, ef\\_search=50)")
+fig, axes = plt.subplots(1, len(models), figsize=(1.2 + 4.0 * len(models), 3.2),
+                         sharey=True, squeeze=False)
+for ax, model in zip(axes[0], models):
+    df = pd.read_csv(cfg.RESULTS_DIR / f"scalability_targets_{model}.csv")
 
-ax.set_xlabel("Tamaño del corpus (N documentos)")
-ax.set_ylabel("Latencia por consulta (ms)")
-ax.grid(True, alpha=0.3)
-ax.legend(loc="upper left", fontsize=9)
-ax.set_title("Escalabilidad: latencia vs. tamaño del corpus", fontsize=10)
+    exact = df.dropna(subset=["exact_ms"]).drop_duplicates("N").sort_values("N")
+    ax.plot(exact["N"], exact["exact_ms"], marker="s", color=ps.SERIES[1], label="Exact search")
+    for target, color, marker in zip(cfg.RECALL_TARGETS, (ps.SERIES[0], ps.SERIES[2]), ("o", "^")):
+        d = df[(df["target"] == target) & df["hnsw_ms"].notna()].sort_values("N")
+        ax.plot(d["N"], d["hnsw_ms"], marker=marker, color=color,
+                label=f"HNSW at Recall@10 ≥ {target}")
 
-# Anotación del speedup en el N máximo
-last = df.iloc[-1]
-ax.annotate(f"HNSW {last['speedup']:.1f}$\\times$ más rápido\nque la exacta en N={int(last['N']):,}",
-            xy=(last["N"], last["hnsw_ms"]),
-            xytext=(last["N"] * 0.55, max(df["exact_ms"]) * 0.5),
-            fontsize=8, color="#1f77b4",
-            arrowprops=dict(arrowstyle="->", color="#1f77b4", alpha=0.7))
+    ax.set_xscale("log")
+    ax.set_yscale("log")
+    ps.plain_ticks(ax.yaxis, [0.1, 0.2, 0.5, 1, 2, 5, 10, 20, 50, 100, 200, 500])
+    ax.set_ylim(min(df["hnsw_ms"].min(), exact["exact_ms"].min()) * 0.8,
+                max(df["hnsw_ms"].max(), exact["exact_ms"].max()) * 1.25)
+    ax.set_xticks(exact["N"])
+    ax.set_xticklabels([f"{n / 1000:.0f}k" for n in exact["N"]])
+    ax.xaxis.set_minor_locator(plt.NullLocator())
+    ax.set_xlabel("Corpus size $N$ (log scale)")
+    if len(models) > 1:
+        ax.set_title(cfg.ALL_MODELS[model]["label"], fontsize=9)
 
-fig.tight_layout()
-fig.savefig(IMAGES / "fig_scalability.png", dpi=200)
-print("Guardado:", IMAGES / "fig_scalability.png")
+axes[0][0].set_ylabel("Latency per query (ms, log scale)")
+axes[0][0].legend(loc="center right")
+ps.save(fig, "fig_scalability.png")

@@ -8,6 +8,48 @@ Las líneas `L…` se refieren a `paper_en.tex`.
 
 ---
 
+## 0. Estado (31 de octubre de 2026)
+
+**Hecho:** código corregido en la rama `revision-paper-54`, experimentos locales repetidos, figuras en inglés y notebook de Colab listo.
+
+**Falta, en orden:**
+1. Correr `code/colab_embeddings.ipynb` en Colab y copiar los resultados a la PC.
+2. Evaluar los modelos nuevos y la escala a 1M.
+3. **Corrida final limpia** con `bash code/run_experiments.sh`, sin usar el equipo mientras corre. En la corrida de hoy, otro proceso duplicó la latencia de dos construcciones.
+4. Reescribir el artículo y la carta a los revisores.
+
+Estas cifras son las de hoy. El recall será casi igual en la corrida final; las latencias pueden moverse un poco. Los tiempos del benchmark son la mediana de 5 construcciones. Los de escalabilidad son la media de 3 y los de familias de índices salen de una sola construcción; la corrida final deja los de escalabilidad también en mediana.
+
+| Afirmación | Paper enviado | Medición corregida |
+|---|---|---|
+| Consultas dentro del corpus | 982 de 1 000 (sin declarar) | 0, con 48 018 documentos indexados |
+| Peor Recall@10 con ef_search=50 | 0.946 | 0.884 |
+| M=32, ef_c=400, ef_search=50, SciBERT / E5 | 0.998 / 0.995 | 0.991 / 0.977 |
+| Configuración de referencia | "Óptima": M=32, ef_c=400, ef_search=50 | Menor latencia con R@10 ≥ 0.99 en ambos modelos: M=32, ef_c=100, ef_search=100 |
+| En esa configuración, SciBERT / E5 | — | R@10 0.997 / 0.992; 0.66 / 0.98 ms; 11 / 22 s; 153 / 200 MB |
+| Coste de subir ef_c de 100 a 400 | "Casi duplica" | ×2.7 a ×3.6 en construcción, por +0.001 a +0.007 de R@10 de media |
+| Memoria según M (de 8 a 32) | Sin medir | Solo +5 % a +6 %: dominan los vectores |
+| MRR frente a R@1 en fidelidad | "Confirma desde otro ángulo" | Iguales en 108 de 108 puntos |
+| Fidelidad SciBERT vs E5 | +0.003, en el nivel del ruido | +0.005, IC 95 % [+0.003, +0.007]; p Holm 7e-9; se distingue del ruido (d.e. 0.0004) |
+| Título→abstract R@10, búsqueda exacta | 0.194 vs 0.953 (con HNSW) | 0.173 vs 0.949; rango mediano 259 vs 1; 1 vs 777 pares discordantes |
+| Título→abstract R@10, HNSW | Igual que arriba | 0.163 vs 0.944 |
+| HNSW frente a exacta, una consulta y 1 hilo | Sin medir | HNSW gana en todo el rango: ×5 a ×28 con R@10 ≥ 0.99 |
+| HNSW frente a exacta, en lote con 12 hilos | Cruce cerca de 60 000 | Casi empate hasta 100k: ×0.5 a ×1.1. Explica el "cruce" |
+| Pendiente log-log hasta 100k | "Sublineal" y "exponencial" | Exacta 0.95 [0.88, 1.02]; HNSW a R@10 ≥ 0.99, 0.43 [0.27, 0.58] |
+| Vectorizar más buscar, título en CPU, SciBERT / E5 | Sin medir | 46 / 202 ms; vectorizar es más del 98 % del tiempo |
+
+**Otras familias de índices, con R@10 ≥ 0.99 (SciBERT / E5):**
+- **HNSW:** 0.64 / 1.06 ms.
+- **IVF-Flat:** 2.22 / 4.28 ms, pero se construye entre 4 y 6 veces más rápido.
+- **IVF-PQ con OPQ:** no llega; se queda en 0.737 / 0.611, a cambio de ocupar muy poca memoria. PQ con producto interno y sin OPQ no pasaba de 0.235 / 0.366, así que esa configuración se descartó por injusta.
+- **IVF-PQ con OPQ y reordenamiento:** 1.21 ms en SciBERT; E5 no llega y se queda en 0.983. Ocupa casi lo mismo que HNSW, porque guarda los vectores, y OPQ tarda más de 8 minutos en entrenar.
+- **BallTree (árbol exacto):** 78 / 79 ms, más lento que la búsqueda exacta (9 / 17 ms) y con el doble de memoria.
+- **Annoy (árbol aproximado):** no evaluado; se declara como limitación.
+
+La construcción de 3 366 s de E5 en `index_families.csv` no vale: incluye 44 minutos de una suspensión del equipo. Se corrige en la corrida final.
+
+---
+
 ## 1. Errores del experimento que los revisores no vieron
 
 Salieron al revisar el código para responder a las observaciones. Cambian cifras publicadas, así que van antes que todo lo demás.
@@ -108,7 +150,7 @@ Nuevo `04_benchmark.py`:
 
 Regla de selección, que sustituye a "la mejor por R@10":
 - Frente de Pareto sobre recall, latencia, construcción y memoria.
-- Configuración de referencia: la de menor latencia que alcance un umbral de recall. El umbral se fija y se escribe **antes** de mirar los resultados.
+- Configuración de referencia: la de menor latencia que alcance Recall@10 ≥ 0.99. Es un objetivo convencional, fijado antes de correr la rejilla completa, aunque ya se habían visto las cifras provisionales de la sección 1.
 
 Se ejecuta en este orden, porque 07–10 tienen la mejor configuración escrita a mano: `03 → 04 → 05 → elegir referencia → 07 → 08 → 09 → 10`.
 - **07:** barrido de ef_search en ambos modelos y todas las M.

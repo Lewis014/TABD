@@ -1,0 +1,14 @@
+\begin{table}[tbp]
+\caption{Paired tests over the same queries, Holm-adjusted. $n$: pairs with a difference; $r$: rank-biserial correlation; CI: 95\,\% paired bootstrap of the mean difference; $b$, $c$: discordant pairs over the builds.}\label{tab:significancia}
+\centering
+\begin{tabular}{|l|l|l|l|c|l|c|}
+\hline
+\textbf{Scenario} & \textbf{Pair} & \textbf{Metric} & \textbf{Test} & \textbf{Means} & \textbf{Detail} & \textbf{$p_{\mathrm{Holm}}$} \\
+\hline
+Abs$\rightarrow$abs & SciBERT vs E5-large & R@10 & Wilcoxon & 0.997 / 0.992 & $n$=223, $r$=+0.450, CI [+0.0032, +0.0067] & 0.0e+00 \\
+Abs$\rightarrow$abs & SciBERT vs E5-large & R@10$=1$ & Mcnemar & 0.973 / 0.932 & $b$=61-73, $c$=21-32 & 3.5e-03 \\
+Title$\rightarrow$abs & SciBERT vs E5-large & Hit@10 & Mcnemar & 0.173 / 0.949 & $b$=1-1, $c$=777-777 & 0.0e+00 \\
+Title$\rightarrow$abs & SciBERT vs E5-large & RR@10 & Wilcoxon & 0.093 / 0.899 & $n$=888, $r$=-0.997, CI [-0.8279, -0.7848] & 0.0e+00 \\
+\hline
+\end{tabular}
+\end{table}

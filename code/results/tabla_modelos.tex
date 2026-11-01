@@ -1,0 +1,12 @@
+\begin{table}[tbp]
+\caption{Effect of domain and training objective at the reference configuration ($M=32$, \textit{ef\_c}$=100$, \textit{ef\_s}$=100$). Fidelity: abstract$\rightarrow$abstract Recall@10 against exact search. Retrieval: title$\rightarrow$abstract with exact search.}\label{tab:modelos}
+\centering
+\begin{tabular}{|l|l|c|c|c|c|c|c|c|c|}
+\hline
+\textbf{Model} & \textbf{Domain} & \textbf{Retrieval training} & \textbf{Dim.} & \textbf{Fid. R@10} & \textbf{Search (ms)} & \textbf{R@1} & \textbf{R@10} & \textbf{MRR@10} & \textbf{Encode (ms)} \\
+\hline
+SciBERT & Scientific & No & 768 & 0.997 & 0.66 & 0.061 & 0.173 & 0.093 & 45 \\
+E5-large & General & Yes & 1024 & 0.992 & 0.98 & 0.869 & 0.949 & 0.899 & 201 \\
+\hline
+\end{tabular}
+\end{table}

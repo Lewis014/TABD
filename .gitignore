@@ -4,6 +4,9 @@ code/corpus_meta.parquet
 *.npy
 *.zip
 
+# Configuración local de Claude Code
+.claude/
+
 # Bytecode y caché de Python
 __pycache__/
 *.pyc
