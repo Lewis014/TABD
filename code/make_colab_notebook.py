@@ -1,6 +1,8 @@
 """
-Genera colab_embeddings.ipynb: un único notebook con el código y los ids que necesita,
-para no tener que subir nada más a Colab.
+Genera los notebooks de Colab, cada uno con el código y los ids que necesita, para no
+tener que subir nada más:
+  colab_embeddings.ipynb   vectoriza los modelos adicionales
+  colab_scale.ipynb        pool grande para la escalabilidad
 
 Ejecutar de nuevo si cambian config.py, encoders.py, los scripts de Colab o splits/:
     python make_colab_notebook.py
@@ -36,30 +38,9 @@ def code(text, hidden=False):
             "source": text.strip().splitlines(True)}
 
 
-INTRO = """
-# Embeddings para la revisión del paper 54
-
-**Cómo usarlo**
-
-1. Menú **Entorno de ejecución → Cambiar tipo de entorno de ejecución → GPU T4 → Guardar**.
-2. Menú **Entorno de ejecución → Ejecutar todo**, y autoriza el acceso a Google Drive cuando lo pida.
-3. Deja la pestaña abierta. Todo se guarda en Google Drive a medida que avanza.
-
-**Si se corta o se acaba la GPU gratis:** vuelve a **Ejecutar todo**, aunque sea otro día. Lo que ya
-está hecho se salta y sigue donde quedó.
-
-**Qué genera en Google Drive**
-
-- `tabd_embeddings/`: los 4 modelos nuevos, unos 150 MB por modelo. Es lo imprescindible y corre primero.
-- `tabd_scale_e5/`: el pool de 1 millón de abstracts para la escalabilidad, unos 4 GB. Tarda varias
-  horas y necesita ese espacio libre en Drive. Para omitirlo, desmarca `ESCALA_1M` en la primera celda.
-"""
-
 SETUP = """
 #@title 1. Preparar el entorno
-ESCALA_1M = True  #@param {type:"boolean"}
-
-import base64, io, os, zipfile
+import base64, glob, io, os, shutil, zipfile
 import torch
 from google.colab import drive
 
@@ -67,8 +48,7 @@ assert torch.cuda.is_available(), "No hay GPU: elige GPU T4 en Entorno de ejecuc
 print("GPU:", torch.cuda.get_device_name(0))
 
 drive.mount("/content/drive")
-OUT = "/content/drive/MyDrive/tabd_embeddings"
-OUT_SCALE = "/content/drive/MyDrive/tabd_scale_e5"
+OUT = "/content/drive/MyDrive/{folder}"
 os.makedirs(OUT, exist_ok=True)
 
 BUNDLE = \"\"\"
@@ -85,6 +65,21 @@ INSTALL = """
 !pip install -q datasets sentence-transformers pandas pyarrow
 """
 
+# ---------------------------------------------------------------------------
+# Modelos adicionales
+# ---------------------------------------------------------------------------
+MODELS_INTRO = """
+# Embeddings de los modelos adicionales
+
+**Cómo usarlo**
+
+1. Menú **Entorno de ejecución → Cambiar tipo de entorno de ejecución → GPU T4 → Guardar**.
+2. Menú **Entorno de ejecución → Ejecutar todo**, y autoriza el acceso a Google Drive cuando lo pida.
+3. Deja la pestaña abierta. Todo se guarda en `tabd_embeddings/` en Google Drive a medida que avanza.
+
+Necesita unos 600 MB libres en Drive. **Si se corta:** vuelve a **Ejecutar todo**; lo que ya está hecho se salta.
+"""
+
 MODELS = """
 #@title 3. SciNCL, BERT y E5-base
 !python colab_embed.py --models scincl bert e5_base --out "{OUT}"
@@ -94,12 +89,10 @@ SPECTER = """
 #@title 4. SPECTER2 (necesita la librería adapters)
 !pip install -q -U adapters
 !python colab_embed.py --models specter2 --out "{OUT}"
-# adapters puede bajar la versión de transformers: se restaura para la escala
-!pip install -q -U transformers sentence-transformers
 """
 
 CHECK = """
-#@title 5. Comprobar los modelos
+#@title 5. Comprobar y terminar de subir a Drive
 import numpy as np
 expected = {"scincl": 768, "bert": 768, "e5_base": 768, "specter2": 768}
 counts = {"corpus": 48018, "query": 1000, "title": 1000}
@@ -116,39 +109,95 @@ for model, dim in expected.items():
         ok = ok and good
         print(f"{'OK    ' if good else 'MAL   '} {kind}_{model}.npy {shape}")
 print("\\nTodo correcto." if ok else "\\nHay archivos faltantes: copia aquí el error de la celda 3 o 4.")
+drive.flush_and_unmount()
+print("Drive sincronizado. Revisa en la carpeta que estén los 12 archivos.")
+"""
+
+# ---------------------------------------------------------------------------
+# Pool de escalabilidad
+# ---------------------------------------------------------------------------
+SCALE_INTRO = """
+# Pool de escalabilidad (E5-base)
+
+Vectoriza hasta 1 millón de abstracts en tramos de 50 000, de unos 150 MB cada uno. Antes de empezar
+mide el espacio libre en Drive y **se detiene antes de llenarlo**.
+
+**Cómo usarlo**
+
+1. Menú **Entorno de ejecución → Cambiar tipo de entorno de ejecución → GPU T4 → Guardar**.
+2. Menú **Entorno de ejecución → Ejecutar todo**, y autoriza el acceso a Google Drive cuando lo pida.
+3. Deja la pestaña abierta, con la tapa de la laptop abierta y sin suspender el equipo.
+
+**Si se corta o se acaba la GPU gratis:** vuelve a **Ejecutar todo**, aunque sea otro día. Lo que ya está
+hecho se salta. Con 500 000 abstracts (10 tramos) ya es suficiente; puedes parar ahí.
+
+Cada línea de avance indica cuánto tardó ese tramo. Todo queda en `tabd_scale_e5_base/` en Google Drive.
+"""
+
+SCALE_PLAN = """
+#@title 3. Ver cuántos tramos caben en Drive
+CHUNK_VECTORS = 50_000
+CHUNK_BYTES = CHUNK_VECTORS * 768 * 4
+MARGIN_BYTES = 300 * 2**20
+
+done = len(glob.glob(f"{OUT}/part_e5_base_*.npy"))
+free = shutil.disk_usage("/content/drive/MyDrive").free
+fits = max(0, free - MARGIN_BYTES) // CHUNK_BYTES
+parts = min(20, done + fits)
+print(f"Libre en Drive: {free / 2**30:.2f} GB | tramos hechos: {done} | caben {fits} más")
+assert parts > 0, "No hay espacio libre en Drive: libera al menos 500 MB y vuelve a ejecutar."
+STOP_AFTER = parts * CHUNK_VECTORS
+print(f"Objetivo: {STOP_AFTER:,} abstracts ({parts} tramos)")
 """
 
 SCALE = """
-#@title 6. Pool de escalabilidad (varias horas; se puede retomar)
-if ESCALA_1M:
-    !python colab_embed_scale.py --model e5 --n 1000000 --out "{OUT_SCALE}"
-else:
-    print("Omitido: ESCALA_1M está desmarcado.")
+#@title 4. Vectorizar (varias horas; se puede retomar)
+!python colab_embed_scale.py --model e5_base --n 1000000 --stop-after {STOP_AFTER} --batch-size 64 --out "{OUT}"
+"""
+
+SCALE_END = """
+#@title 5. Terminar de subir a Drive
+drive.flush_and_unmount()
+print("Drive sincronizado. Revisa la carpeta tabd_scale_e5_base y avísame cuántos tramos quedaron.")
 """
 
 
-def main():
-    wrapped = "\n".join(textwrap.wrap(bundle(), 120))
-    cells = [
-        markdown(INTRO),
-        code(SETUP.replace("{bundle}", wrapped), hidden=True),
-        code(INSTALL),
-        code(MODELS),
-        code(SPECTER),
-        code(CHECK),
-        code(SCALE),
-    ]
+def write_notebook(name, cells):
     notebook = {
         "cells": cells,
-        "metadata": {"accelerator": "GPU", "colab": {"gpuType": "T4", "name": "colab_embeddings.ipynb"},
+        "metadata": {"accelerator": "GPU", "colab": {"gpuType": "T4", "name": name},
                      "kernelspec": {"display_name": "Python 3", "name": "python3"},
                      "language_info": {"name": "python"}},
         "nbformat": 4,
         "nbformat_minor": 5,
     }
-    out = cfg.ROOT / "colab_embeddings.ipynb"
+    out = cfg.ROOT / name
     out.write_text(json.dumps(notebook, ensure_ascii=False, indent=1), encoding="utf-8")
     print(f"Notebook: {out} ({out.stat().st_size / 1024:.0f} KB)")
+
+
+def setup_cell(folder, wrapped):
+    return code(SETUP.replace("{folder}", folder).replace("{bundle}", wrapped), hidden=True)
+
+
+def main():
+    wrapped = "\n".join(textwrap.wrap(bundle(), 120))
+    write_notebook("colab_embeddings.ipynb", [
+        markdown(MODELS_INTRO),
+        setup_cell("tabd_embeddings", wrapped),
+        code(INSTALL),
+        code(MODELS),
+        code(SPECTER),
+        code(CHECK),
+    ])
+    write_notebook("colab_scale.ipynb", [
+        markdown(SCALE_INTRO),
+        setup_cell("tabd_scale_e5_base", wrapped),
+        code(INSTALL),
+        code(SCALE_PLAN),
+        code(SCALE),
+        code(SCALE_END),
+    ])
 
 
 if __name__ == "__main__":

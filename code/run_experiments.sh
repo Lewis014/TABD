@@ -19,7 +19,7 @@ python 11_end_to_end_latency.py
 python 13_factorial_models.py
 python 08_significance.py
 python 10_scalability.py --model scibert
-if [ -d data/scale_e5 ]; then python 10_scalability.py --model e5; fi
+if [ -d data/scale_e5_base ]; then python 10_scalability.py --model e5_base; fi
 python 12_index_families.py
 python 14_tables.py
 

@@ -9,7 +9,10 @@ cual y se excluyen del pool antes de muestrear.
 Una vectorización de horas puede cortarse, así que guarda por tramos en --out (conviene
 que esté en Google Drive) y retoma donde quedó al volver a ejecutar. La muestra se baraja
 de forma fija: aunque no se llegue a terminar, los tramos hechos son una muestra aleatoria
-y sirven igual.
+y sirven igual. --stop-after detiene el trabajo en esa cantidad de vectores sin cambiar la
+muestra, por ejemplo para no pasarse del espacio disponible.
+
+Por defecto usa E5-base: es de la misma familia que E5-large y tarda cerca de la mitad.
 
 Salida en --out:
     corpus_{modelo}_scale_meta.parquet   (id, major) en el orden de los vectores
@@ -19,6 +22,7 @@ Los archivos van en E:\\TABD\\code\\data\\scale_{modelo}\\ en la máquina local.
 """
 
 import argparse
+import time
 from pathlib import Path
 
 import torch
@@ -35,11 +39,15 @@ CHUNK = 50_000
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--model", default="e5", choices=list(cfg.ALL_MODELS))
+    parser.add_argument("--model", default="e5_base", choices=list(cfg.ALL_MODELS))
     parser.add_argument("--n", type=int, default=1_000_000)
-    parser.add_argument("--out", type=Path, default=cfg.DATA_DIR / "scale_e5")
+    parser.add_argument("--stop-after", type=int, default=None)
+    parser.add_argument("--batch-size", type=int, default=cfg.BATCH_SIZE)
+    parser.add_argument("--out", type=Path, default=None)
     args = parser.parse_args()
-    args.out.mkdir(parents=True, exist_ok=True)
+    out = args.out or cfg.DATA_DIR / f"scale_{args.model}"
+    out.mkdir(parents=True, exist_ok=True)
+    cfg.BATCH_SIZE = args.batch_size
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
     print(f">>> Dispositivo: {device}")
@@ -50,22 +58,25 @@ def main():
     df = df[~df["id"].isin(set(cfg.read_ids(cfg.query_ids_path())))]
     subset = _embed.stratified_sample(df[["id", "abstract", "major"]], args.n, SCALE_SEED)
     subset = subset.sort_values("id").sample(frac=1, random_state=SCALE_SEED).reset_index(drop=True)
-    subset[["id", "major"]].to_parquet(args.out / f"corpus_{args.model}_scale_meta.parquet")
+    subset[["id", "major"]].to_parquet(out / f"corpus_{args.model}_scale_meta.parquet")
     print(f"Muestra de escalabilidad: {len(subset):,}", flush=True)
 
     model = None
     texts = subset["abstract"].tolist()
-    for start in range(0, len(texts), CHUNK):
-        part = args.out / f"part_{args.model}_{start:08d}.npy"
+    last = min(args.stop_after or len(texts), len(texts))
+    for start in range(0, last, CHUNK):
+        part = out / f"part_{args.model}_{start:08d}.npy"
         if part.exists():
             continue
         if model is None:
             model = load_encoder(args.model, device)
+        t0 = time.perf_counter()
         emb = encode(args.model, model, texts[start:start + CHUNK], "doc", device, show_progress=False)
         _embed.save_npy(part, emb)
-        print(f"  {min(start + CHUNK, len(texts)):,} / {len(texts):,}", flush=True)
+        print(f"  {min(start + CHUNK, len(texts)):,} / {last:,}  ({(time.perf_counter() - t0) / 60:.1f} min este tramo)",
+              flush=True)
 
-    print(f"Listo. Archivos en {args.out}")
+    print(f"Listo: {last:,} vectores en {out}")
 
 
 if __name__ == "__main__":

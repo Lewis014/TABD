@@ -13,8 +13,8 @@ Las líneas `L…` se refieren a `paper_en.tex`.
 **Hecho:** código corregido en la rama `revision-paper-54`, experimentos locales repetidos, figuras en inglés y notebook de Colab listo.
 
 **Falta, en orden:**
-1. Correr `code/colab_embeddings.ipynb` en Colab y copiar los resultados a la PC.
-2. Evaluar los modelos nuevos y la escala a 1M.
+1. Terminar `code/colab_scale.ipynb` en Colab (E5-base, 500 000 a 1 000 000 de abstracts) y copiar los tramos a `code/data/scale_e5_base/`.
+2. Medir la escalabilidad con ese pool.
 3. **Corrida final limpia** con `bash code/run_experiments.sh`, sin usar el equipo mientras corre. En la corrida de hoy, otro proceso duplicó la latencia de dos construcciones.
 4. Reescribir el artículo y la carta a los revisores.
 
@@ -47,6 +47,28 @@ Estas cifras son las de hoy. El recall será casi igual en la corrida final; las
 - **Annoy (árbol aproximado):** no evaluado; se declara como limitación.
 
 La construcción de 3 366 s de E5 en `index_families.csv` no vale: incluye 44 minutos de una suspensión del equipo. Se corrige en la corrida final.
+
+**Dominio frente a objetivo de entrenamiento (configuración de referencia):**
+
+| Modelo | Dominio | Entrenamiento | Dim. | Fidelidad R@10 | Título→abstract R@10 (exacta) | Título→abstract MRR@10 | Búsqueda (ms) |
+|---|---|---|---|---|---|---|---|
+| BERT | General | Ninguno para recuperación | 768 | 0.996 | 0.175 | 0.094 | 0.60 |
+| SciBERT | Científico | Ninguno para recuperación | 768 | 0.997 | 0.173 | 0.093 | 0.66 |
+| SciNCL | Científico | Citas; parte de SciBERT | 768 | 0.998 | 0.746 | 0.600 | 0.49 |
+| SPECTER2 | Científico | Citas; adaptador de consulta | 768 | 0.998 | 0.754 | 0.607 | 0.68 |
+| E5-base | General | Pares consulta-documento | 768 | 0.986 | 0.922 | 0.851 | 0.88 |
+| E5-large | General | Pares consulta-documento | 1024 | 0.992 | 0.949 | 0.899 | 0.98 |
+
+Qué permite afirmar, con corrección de Holm sobre 24 pruebas:
+- **El dominio solo no aporta:** BERT y SciBERT no se distinguen en título→abstract (p Holm = 1.0).
+- **El objetivo de entrenamiento sí:** SciBERT frente a SciNCL, que parte de sus pesos, pasa de 0.173 a 0.746 (p Holm ≈ 3e-154).
+- **Entre los entrenados, mejor los de consulta-documento en esta tarea:** SciNCL 0.746 frente a E5-base 0.922, ambos de 768d. Aquí cambian a la vez el dominio y el tipo de entrenamiento, así que no se puede atribuir a uno solo.
+- **La fidelidad casi no depende del modelo:** todos están entre 0.986 y 0.998. Fidelidad y recuperación son dimensiones distintas.
+- **La dimensión no explica el costo por sí sola:** con 768d, la búsqueda va de 0.49 a 0.88 ms. E5-base tiene menos dimensiones que E5-large y aun así menos fidelidad. L289 debe corregirse.
+
+**Vectorizar una consulta en CPU (título / abstract):** SciBERT 42 / 157 ms, SciNCL 48 / 170 ms, BERT 50 / 183 ms, E5-base 55 / 190 ms, E5-large 185 / 591 ms. SPECTER2 no se midió: `adapters` exige otra versión de `transformers`. E5-base vectoriza títulos unas 3.3 veces más rápido que E5-large y pierde 0.027 de Recall@10. Los vectores de SciNCL, BERT y E5-base generados en Colab coinciden con los locales (coseno 1.000 en las filas comprobadas), así que las filas están bien alineadas.
+
+Limitaciones que hay que declarar: SciNCL y SPECTER2 reciben solo el abstract, no `título [SEP] abstract`, para no filtrar la respuesta; y título→abstract es una tarea concreta, que no equivale a juicios humanos de relevancia.
 
 ---
 

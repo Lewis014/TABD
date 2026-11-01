@@ -61,15 +61,19 @@ y el resto del pipeline trabaja sobre `data/clean/`.
 ```bash
 python colab_embed.py --models scincl bert e5_base
 python colab_embed.py --models specter2    # requiere adapters; mejor en un entorno aparte
-python colab_embed_scale.py --model e5 --n 1000000
+python colab_embed_scale.py --model e5_base --n 1000000
 ```
 
-Los `.npy` de modelos van en `data/clean/` y los del pool en `data/`. Después:
+En Colab, lo más simple son `colab_embeddings.ipynb` y `colab_scale.ipynb`, que traen todo lo necesario
+(los genera `make_colab_notebook.py`). Los `.npy` de modelos van en `data/clean/` y los del pool en
+`data/scale_e5_base/`. Después:
 
 ```bash
 bash run_models.sh
-python 10_scalability.py --model e5
+python 10_scalability.py --model e5_base
 ```
+
+Para que el equipo no se suspenda durante una corrida larga: `python keep_awake.py bash run_experiments.sh`.
 
 ## Figuras
 
