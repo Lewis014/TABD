@@ -1,34 +1,41 @@
 \begin{table}[tbp]
-\caption{Paired tests over the same queries, Holm-adjusted. $n$: pairs with a difference; $r$: rank-biserial correlation; CI: 95\,\% paired bootstrap of the mean difference; $b$, $c$: discordant pairs over the builds.}\label{tab:significancia}
+\caption{Paired tests at the reference configuration, Holm-adjusted over 24 tests. Fidelity: abstract$\rightarrow$abstract against each model's exact search; Title: title$\rightarrow$abstract with exact search. $n$: queries with a difference; $r$: rank-biserial correlation; CI: 95\,\% paired bootstrap of the mean difference; $b$, $c$: discordant queries (range over the builds).}\label{tab:significancia}
 \centering
-\begin{tabular}{|l|l|l|l|c|l|c|}
+\scriptsize
+\begin{tabular}{|l|l|c|l|c|}
 \hline
-\textbf{Scenario} & \textbf{Pair} & \textbf{Metric} & \textbf{Test} & \textbf{Means} & \textbf{Detail} & \textbf{$p_{\mathrm{Holm}}$} \\
+\textbf{Comparison} & \textbf{Test} & \textbf{Means} & \textbf{Detail} & \textbf{$p_{\mathrm{Holm}}$} \\
 \hline
-Abs$\rightarrow$abs & SciBERT vs E5-large & R@10 & Wilcoxon & 0.997 / 0.992 & $n$=225, $r$=+0.462, CI [+0.0035, +0.0071] & 0.0e+00 \\
-Abs$\rightarrow$abs & SciBERT vs E5-large & R@10$=1$ & Mcnemar & 0.974 / 0.931 & $b$=56-74, $c$=21-31 & 4.9e-03 \\
-Title$\rightarrow$abs & SciBERT vs E5-large & Hit@10 & Mcnemar & 0.173 / 0.949 & $b$=1-1, $c$=777-777 & 0.0e+00 \\
-Title$\rightarrow$abs & SciBERT vs E5-large & RR@10 & Wilcoxon & 0.093 / 0.899 & $n$=888, $r$=-0.997, CI [-0.8279, -0.7848] & 0.0e+00 \\
-Abs$\rightarrow$abs & SciBERT vs SciNCL & R@10 & Wilcoxon & 0.997 / 0.998 & $n$=107, $r$=-0.252, CI [-0.0022, -0.0002] & 1.6e-01 \\
-Abs$\rightarrow$abs & SciBERT vs SciNCL & R@10$=1$ & Mcnemar & 0.974 / 0.984 & $b$=11-19, $c$=21-30 & 1.0e+00 \\
-Title$\rightarrow$abs & SciBERT vs SciNCL & Hit@10 & Mcnemar & 0.173 / 0.746 & $b$=12-12, $c$=585-585 & 0.0e+00 \\
-Title$\rightarrow$abs & SciBERT vs SciNCL & RR@10 & Wilcoxon & 0.093 / 0.600 & $n$=705, $r$=-0.958, CI [-0.5362, -0.4785] & 0.0e+00 \\
-Abs$\rightarrow$abs & SciBERT vs SPECTER2 & R@10 & Wilcoxon & 0.997 / 0.998 & $n$=129, $r$=-0.171, CI [-0.0019, +0.0002] & 5.7e-01 \\
-Abs$\rightarrow$abs & SciBERT vs SPECTER2 & R@10$=1$ & Mcnemar & 0.974 / 0.980 & $b$=15-23, $c$=23-32 & 1.0e+00 \\
-Title$\rightarrow$abs & SciBERT vs SPECTER2 & Hit@10 & Mcnemar & 0.173 / 0.754 & $b$=15-15, $c$=596-596 & 0.0e+00 \\
-Title$\rightarrow$abs & SciBERT vs SPECTER2 & RR@10 & Wilcoxon & 0.093 / 0.607 & $n$=719, $r$=-0.950, CI [-0.5440, -0.4849] & 0.0e+00 \\
-Abs$\rightarrow$abs & BERT vs SciBERT & R@10 & Wilcoxon & 0.996 / 0.997 & $n$=135, $r$=-0.097, CI [-0.0019, +0.0004] & 1.0e+00 \\
-Abs$\rightarrow$abs & BERT vs SciBERT & R@10$=1$ & Mcnemar & 0.968 / 0.974 & $b$=19-28, $c$=24-30 & 1.0e+00 \\
-Title$\rightarrow$abs & BERT vs SciBERT & Hit@10 & Mcnemar & 0.175 / 0.173 & $b$=79-79, $c$=77-77 & 1.0e+00 \\
-Title$\rightarrow$abs & BERT vs SciBERT & RR@10 & Wilcoxon & 0.094 / 0.093 & $n$=224, $r$=+0.022, CI [-0.0152, +0.0169] & 1.0e+00 \\
-Abs$\rightarrow$abs & SciNCL vs E5-base & R@10 & Wilcoxon & 0.998 / 0.986 & $n$=274, $r$=+0.861, CI [+0.0103, +0.0140] & 0.0e+00 \\
-Abs$\rightarrow$abs & SciNCL vs E5-base & R@10$=1$ & Mcnemar & 0.984 / 0.882 & $b$=107-126, $c$=8-17 & 0.0e+00 \\
-Title$\rightarrow$abs & SciNCL vs E5-base & Hit@10 & Mcnemar & 0.746 / 0.922 & $b$=21-21, $c$=197-197 & 0.0e+00 \\
-Title$\rightarrow$abs & SciNCL vs E5-base & RR@10 & Wilcoxon & 0.600 / 0.851 & $n$=440, $r$=-0.842, CI [-0.2776, -0.2237] & 0.0e+00 \\
-Abs$\rightarrow$abs & E5-base vs E5-large & R@10 & Wilcoxon & 0.986 / 0.992 & $n$=323, $r$=-0.378, CI [-0.0080, -0.0035] & 0.0e+00 \\
-Abs$\rightarrow$abs & E5-base vs E5-large & R@10$=1$ & Mcnemar & 0.882 / 0.931 & $b$=48-57, $c$=91-111 & 9.0e-03 \\
-Title$\rightarrow$abs & E5-base vs E5-large & Hit@10 & Mcnemar & 0.922 / 0.949 & $b$=8-8, $c$=35-35 & 4.6e-04 \\
-Title$\rightarrow$abs & E5-base vs E5-large & RR@10 & Wilcoxon & 0.851 / 0.899 & $n$=140, $r$=-0.706, CI [-0.0612, -0.0360] & 0.0e+00 \\
+\multicolumn{5}{|l|}{\textit{SciBERT vs E5-large}} \\
+Fidelity, R@10 & Wilcoxon & 0.997 / 0.992 & $n$=225, $r$=+0.462, CI [+0.0035, +0.0071] & $1.4\times10^{-8}$ \\
+Fidelity, R@10$=1$ & McNemar & 0.974 / 0.931 & $b$=56-74, $c$=21-31 & $4.9\times10^{-3}$ \\
+Title, hit@10 & McNemar & 0.173 / 0.949 & $b$=1-1, $c$=777-777 & $<10^{-10}$ \\
+Title, RR@10 & Wilcoxon & 0.093 / 0.899 & $n$=888, $r$=-0.997, CI [-0.8279, -0.7848] & $<10^{-10}$ \\
+\multicolumn{5}{|l|}{\textit{SciBERT vs SciNCL}} \\
+Fidelity, R@10 & Wilcoxon & 0.997 / 0.998 & $n$=107, $r$=-0.252, CI [-0.0022, -0.0002] & 0.16 \\
+Fidelity, R@10$=1$ & McNemar & 0.974 / 0.984 & $b$=11-19, $c$=21-30 & 1.00 \\
+Title, hit@10 & McNemar & 0.173 / 0.746 & $b$=12-12, $c$=585-585 & $<10^{-10}$ \\
+Title, RR@10 & Wilcoxon & 0.093 / 0.600 & $n$=705, $r$=-0.958, CI [-0.5362, -0.4785] & $<10^{-10}$ \\
+\multicolumn{5}{|l|}{\textit{SciBERT vs SPECTER2}} \\
+Fidelity, R@10 & Wilcoxon & 0.997 / 0.998 & $n$=129, $r$=-0.171, CI [-0.0019, +0.0002] & 0.57 \\
+Fidelity, R@10$=1$ & McNemar & 0.974 / 0.980 & $b$=15-23, $c$=23-32 & 1.00 \\
+Title, hit@10 & McNemar & 0.173 / 0.754 & $b$=15-15, $c$=596-596 & $<10^{-10}$ \\
+Title, RR@10 & Wilcoxon & 0.093 / 0.607 & $n$=719, $r$=-0.950, CI [-0.5440, -0.4849] & $<10^{-10}$ \\
+\multicolumn{5}{|l|}{\textit{BERT vs SciBERT}} \\
+Fidelity, R@10 & Wilcoxon & 0.996 / 0.997 & $n$=135, $r$=-0.097, CI [-0.0019, +0.0004] & 1.00 \\
+Fidelity, R@10$=1$ & McNemar & 0.968 / 0.974 & $b$=19-28, $c$=24-30 & 1.00 \\
+Title, hit@10 & McNemar & 0.175 / 0.173 & $b$=79-79, $c$=77-77 & 1.00 \\
+Title, RR@10 & Wilcoxon & 0.094 / 0.093 & $n$=224, $r$=+0.022, CI [-0.0152, +0.0169] & 1.00 \\
+\multicolumn{5}{|l|}{\textit{SciNCL vs E5-base}} \\
+Fidelity, R@10 & Wilcoxon & 0.998 / 0.986 & $n$=274, $r$=+0.861, CI [+0.0103, +0.0140] & $<10^{-10}$ \\
+Fidelity, R@10$=1$ & McNemar & 0.984 / 0.882 & $b$=107-126, $c$=8-17 & $<10^{-10}$ \\
+Title, hit@10 & McNemar & 0.746 / 0.922 & $b$=21-21, $c$=197-197 & $<10^{-10}$ \\
+Title, RR@10 & Wilcoxon & 0.600 / 0.851 & $n$=440, $r$=-0.842, CI [-0.2776, -0.2237] & $<10^{-10}$ \\
+\multicolumn{5}{|l|}{\textit{E5-base vs E5-large}} \\
+Fidelity, R@10 & Wilcoxon & 0.986 / 0.992 & $n$=323, $r$=-0.378, CI [-0.0080, -0.0035] & $3.6\times10^{-8}$ \\
+Fidelity, R@10$=1$ & McNemar & 0.882 / 0.931 & $b$=48-57, $c$=91-111 & $9.0\times10^{-3}$ \\
+Title, hit@10 & McNemar & 0.922 / 0.949 & $b$=8-8, $c$=35-35 & $4.6\times10^{-4}$ \\
+Title, RR@10 & Wilcoxon & 0.851 / 0.899 & $n$=140, $r$=-0.706, CI [-0.0612, -0.0360] & $<10^{-10}$ \\
 \hline
 \end{tabular}
 \end{table}

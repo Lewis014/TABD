@@ -22,6 +22,7 @@ python 10_scalability.py --model scibert
 if [ -d data/scale_e5_base ]; then python 10_scalability.py --model e5_base; fi
 python 12_index_families.py
 python 14_tables.py
+python 15_tables_es.py
 
 python 06_plots.py
 python 06b_plot_diagram.py

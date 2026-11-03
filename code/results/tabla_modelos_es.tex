@@ -1,0 +1,18 @@
+\begin{table}[tbp]
+\caption{Dominio frente a objetivo de entrenamiento en la configuración de referencia ($M=32$, \textit{ef\_c}$=100$, \textit{ef\_s}$=100$). Fidelidad: Recall@10 abstract$\rightarrow$abstract de HNSW frente a la búsqueda exacta, y latencia de búsqueda con un hilo. Recuperación: título$\rightarrow$abstract con búsqueda exacta.}\label{tab:modelos}
+\centering
+\small
+\begin{tabular}{|l|l|l|c|c|c|c|c|c|}
+\hline
+\multicolumn{4}{|c|}{} & \multicolumn{2}{c|}{\textbf{Fidelidad}} & \multicolumn{3}{c|}{\textbf{Recuperación}} \\ \cline{5-9}
+\textbf{Modelo} & \textbf{Dominio} & \textbf{Entrenamiento} & \textbf{Dim.} & \textbf{R@10} & \textbf{ms} & \textbf{R@1} & \textbf{R@10} & \textbf{MRR@10} \\
+\hline
+SciBERT & Científico & Ninguno & 768 & 0.997 & 0.60 & 0.061 & 0.173 & 0.093 \\
+SciNCL & Científico & Citas & 768 & 0.998 & 0.45 & 0.527 & 0.746 & 0.600 \\
+SPECTER2 & Científico & Citas & 768 & 0.998 & 0.63 & 0.539 & 0.754 & 0.607 \\
+BERT & General & Ninguno & 768 & 0.996 & 0.58 & 0.064 & 0.175 & 0.094 \\
+E5-base & General & Consulta--pasaje & 768 & 0.986 & 0.75 & 0.813 & 0.922 & 0.851 \\
+E5-large & General & Consulta--pasaje & 1024 & 0.992 & 0.87 & 0.869 & 0.949 & 0.899 \\
+\hline
+\end{tabular}
+\end{table}

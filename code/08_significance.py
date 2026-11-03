@@ -142,7 +142,9 @@ def main():
     df = pd.DataFrame(rows)
     df["p_holm"] = holm(df["p"])
     df["significant"] = df["p_holm"] < ALPHA
-    df.round(6).to_csv(cfg.RESULTS_DIR / "significance.csv", index=False)
+    # Los valores p van sin redondear: muchos están por debajo de 1e-6
+    pvalues = ["p", "p_holm"]
+    df.drop(columns=pvalues).round(6).join(df[pvalues]).to_csv(cfg.RESULTS_DIR / "significance.csv", index=False)
 
     lines = [f"Pruebas pareadas en la configuración de referencia {ref} "
              f"(alpha={ALPHA}, Holm sobre {len(df)} pruebas)", ""]

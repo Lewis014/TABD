@@ -16,7 +16,8 @@ Las líneas `L…` se refieren a `paper_en.tex`.
 1. ~~Pool de escalabilidad E5-base.~~ Hecho el 2 de noviembre: 10 tramos, 500 000 abstracts en `code/data/scale_e5_base/`. Los tramos 1–6 salieron de la cuenta UNSA y los 7–10 de la de Gmail, porque Colab llegó a su límite de GPU gratis. Las dos cuentas produjeron el mismo meta, byte a byte. Los abstracts que también están en el corpus principal dan coseno 1.00000 con sus vectores, así que vectores e ids están alineados.
 2. ~~Medir la escalabilidad con ese pool.~~ Hecho; `Images/fig_scalability.png` tiene ahora dos paneles: SciBERT hasta 100k y E5-base hasta 500k.
 3. ~~Corrida final limpia.~~ Hecha del 2 al 3 de noviembre (23:43–01:32) con `run_experiments.sh` bajo `keep_awake.py`, sin usar el equipo y con el cargador conectado. Terminó sin errores y los ids congelados de `splits/` no cambiaron. Registro en `code/results/run_final.log`.
-4. **Reescribir el artículo y la carta a los revisores.**
+4. ~~Reescribir el artículo.~~ Hecho el 3 de noviembre: `paper_en.tex` (19 páginas) y su versión en español `paper.tex` (20 páginas; figuras en inglés, tablas de `tabla_*_es.tex`). Las tablas entran todas con `\input`. Se quitaron la tabla de `ef_search` (la cubre la figura) y la figura de recall frente a $M$ (la cubre la tabla completa).
+5. **Carta a los revisores (F6).** Debe declarar la fuga de consultas, el cambio de ef_search=50 a la regla de selección, la caída de "peor R@10 > 0.94" a 0.883 y que el cruce en 60 000 no se sostiene. El texto del paper ya no menciona la versión enviada: esas explicaciones van solo en la carta.
 
 Todas las cifras de esta sección salen de esa corrida. Los tiempos del benchmark son la mediana de 5 construcciones. Los de escalabilidad son la mediana de 3, o de una sola desde 500k. Los de familias de índices salen de una sola construcción.
 
@@ -37,7 +38,7 @@ Todas las cifras de esta sección salen de esa corrida. Los tiempos del benchmar
 | HNSW frente a exacta, SciBERT hasta 100k, en lote con 12 hilos | Cruce cerca de 60 000 | Casi empate: ×0.7 a ×1.2 con R@10 ≥ 0.99 y ×1.1 a ×1.8 con ≥ 0.95. Explica el "cruce" |
 | Pendiente log-log, SciBERT hasta 100k | "Sublineal" y "exponencial" | Exacta 1.00 [0.92, 1.07]; HNSW a R@10 ≥ 0.99, 0.52 [0.41, 0.63] |
 | Escalabilidad con E5-base hasta 500k, una consulta y 1 hilo | Sin medir | Exacta 1.1 → 107 ms; HNSW a R@10 ≥ 0.99, 0.28 → 3.3 ms (ef_search 75 → 300). Ventaja ×4 a ×32 |
-| Pendiente log-log con E5-base hasta 500k | Sin medir | Exacta 1.00 [0.96, 1.04]; HNSW a R@10 ≥ 0.99, 0.54 [0.48, 0.59]; a ≥ 0.95, 0.39 [0.26, 0.51] |
+| Pendiente log-log con E5-base hasta 500k | Sin medir | Exacta 1.00 [0.96, 1.04]; HNSW a R@10 ≥ 0.99, 0.53 [0.48, 0.59]; a ≥ 0.95, 0.38 [0.26, 0.51] |
 | E5-base en lote con 12 hilos | Sin medir | A R@10 ≥ 0.99 la exacta gana hasta 200k (×0.3 a ×0.6) y HNSW gana en 500k (×1.3). A ≥ 0.95 empatan en 100k (×1.0) y HNSW gana desde 200k (×1.9 a ×4.8) |
 | Coste del índice E5-base a 500k | Sin medir | 299 s de construcción con 6 hilos; 1.6 GB |
 | Vectorizar más buscar, título en CPU, SciBERT / E5 | Sin medir | 37 / 166 ms; vectorizar es más del 98 % del tiempo |

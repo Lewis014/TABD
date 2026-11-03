@@ -30,8 +30,10 @@ ArXiv (2M) --[GPU]--> muestra con ids congelados --> 48 018 de corpus + 1 000 co
 | `08_significance.py` | local | Pruebas pareadas entre modelos, con Holm |
 | `10_scalability.py` | local | Latencia frente a N, a recall constante |
 | `11_end_to_end_latency.py` | local | Vectorizar + buscar, por modelo |
-| `12_index_families.py` | local | HNSW frente a IVF-Flat, IVF-PQ y Annoy |
+| `12_index_families.py` | local | HNSW frente a IVF-Flat, IVF-PQ, BallTree y Annoy (si está instalado) |
 | `13_factorial_models.py` | local | Dominio frente a objetivo de entrenamiento |
+| `14_tables.py` | local | Tablas LaTeX del artículo (`results/tabla_*.tex`) |
+| `15_tables_es.py` | local | Las mismas tablas en español para `paper.tex` (`tabla_*_es.tex`) |
 | `06_plots.py`, `06b`, `07b`, `09c`, `10b`, `12b` | local | Figuras en `../Images` |
 | `app.py` | local | Demo Streamlit |
 

@@ -1,0 +1,18 @@
+\begin{table}[tbp]
+\caption{Recuperación \textit{known-item} título$\rightarrow$abstract con 1\,000 títulos, con búsqueda exacta y con HNSW ($M=32$, \textit{ef\_c}$=100$, \textit{ef\_s}$=100$). Similitudes entre el título y su propio abstract, y entre el título y el primer documento recuperado.}\label{tab:naturales}
+\centering
+\small
+\begin{tabular}{|l|c|c|c|c|c|c|c|c|}
+\hline
+ & \multicolumn{4}{c|}{\textbf{Búsqueda exacta}} & \textbf{HNSW} & \multicolumn{2}{c|}{\textbf{Similitud}} & \textbf{Rango} \\ \cline{2-8}
+\textbf{Modelo} & \textbf{R@1} & \textbf{R@5} & \textbf{R@10} & \textbf{MRR@10} & \textbf{R@10} & \textbf{Propio} & \textbf{Top-1} & \textbf{mediano} \\
+\hline
+SciBERT & 0.061 & 0.131 & 0.173 & 0.093 & 0.164 & 0.731 & 0.790 & 259 \\
+E5-large & 0.869 & 0.941 & 0.949 & 0.899 & 0.944 & 0.875 & 0.877 & 1 \\
+SciNCL & 0.527 & 0.700 & 0.746 & 0.600 & 0.733 & 0.909 & 0.922 & 1 \\
+SPECTER2 & 0.539 & 0.698 & 0.754 & 0.607 & 0.723 & 0.774 & 0.784 & 1 \\
+BERT & 0.064 & 0.132 & 0.175 & 0.094 & 0.160 & 0.771 & 0.835 & 280 \\
+E5-base & 0.813 & 0.900 & 0.922 & 0.851 & 0.913 & 0.875 & 0.879 & 1 \\
+\hline
+\end{tabular}
+\end{table}

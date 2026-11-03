@@ -75,6 +75,7 @@ def table_configs(df: pd.DataFrame, ref: dict) -> str:
         rf"over {cfg.N_BUILDS} builds (recall: mean $\pm$ s.d.; times: median; latency per query, "
         r"one thread).}\label{tab:configs}",
         r"\centering",
+        r"\small",
         r"\begin{tabular}{|l|c|c|c|c|c|c|c|c|}",
         r"\hline",
         r"\textbf{Model} & \textbf{$M$} & \textbf{\textit{ef\_c}} & \textbf{R@1} & \textbf{R@5} & "
@@ -98,6 +99,7 @@ def table_selection(sel: pd.DataFrame) -> str:
         r"\caption{Cheapest operating point per model and Recall@10 target, for each cost "
         r"(latency per query, one thread).}\label{tab:seleccion}",
         r"\centering",
+        r"\small",
         r"\begin{tabular}{|l|c|l|c|c|c|c|c|c|}",
         r"\hline",
         r"\textbf{Model} & \textbf{Target} & \textbf{Minimizes} & \textbf{$M$} & \textbf{\textit{ef\_c}} & "

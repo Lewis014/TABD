@@ -20,21 +20,33 @@ import pandas as pd
 
 import config as cfg
 
+BATCH_THREADS = 12   # el mismo valor que 10_scalability.py
+
 
 def label(model: str) -> str:
     return cfg.ALL_MODELS[model]["label"]
 
 
-def latex_table(caption, tag, spec, header, rows) -> str:
+# Qué objetivo de similitud tiene cada modelo, para la tabla del cuadro dominio x objetivo
+TRAINING = {"scibert": "None", "bert": "None", "scincl": "Citations", "specter2": "Citations",
+            "e5_base": "Query--passage", "e5": "Query--passage"}
+
+
+def latex_table(caption, tag, spec, header, rows, size=r"\small", group_header=None) -> str:
+    """Tabla para LNCS (122 mm de ancho; llncs ya deja 1.4 pt entre columnas). Una fila que es
+    una cadena se copia tal cual: sirve para subtítulos que ocupan toda la fila."""
+    body = [row if isinstance(row, str) else " & ".join(str(c) for c in row) + r" \\" for row in rows]
     return "\n".join([
         r"\begin{table}[tbp]",
         rf"\caption{{{caption}}}\label{{tab:{tag}}}",
         r"\centering",
+        size,
         rf"\begin{{tabular}}{{{spec}}}",
         r"\hline",
+        *([group_header] if group_header else []),
         " & ".join(rf"\textbf{{{h}}}" for h in header) + r" \\",
         r"\hline",
-        *[" & ".join(str(c) for c in row) + r" \\" for row in rows],
+        *body,
         r"\hline",
         r"\end{tabular}",
         r"\end{table}",
@@ -71,28 +83,46 @@ def naturales(ref):
         rf"\textit{{ef\_s}}$={ref['ef_search']}$). Similarities are between the title and its own "
         r"abstract, and between the title and the top-ranked document.",
         "naturales", "|l|c|c|c|c|c|c|c|c|",
-        ["Model", "R@1", "R@5", "R@10", "MRR@10", r"R@10$_{\mathrm{HNSW}}$", "Sim. own", "Sim. top", "Med. rank"], rows)
+        ["Model", "R@1", "R@5", "R@10", "MRR@10", "R@10", "Own", "Top-1", "rank"], rows,
+        group_header=r" & \multicolumn{4}{c|}{\textbf{Exact search}} & \textbf{HNSW} & "
+                     r"\multicolumn{2}{c|}{\textbf{Similarity}} & \textbf{Median} \\ \cline{2-8}")
+
+
+def p_value(p: float) -> str:
+    """Valor p en notación de LaTeX; por debajo de 1e-10 basta con la cota."""
+    if p < 1e-10:
+        return r"$<10^{-10}$"
+    if p >= 0.01:
+        return f"{p:.2f}"
+    mantissa, exponent = f"{p:.1e}".split("e")
+    return rf"${mantissa}\times10^{{{int(exponent)}}}$"
 
 
 def significancia(ref):
     df = pd.read_csv(cfg.RESULTS_DIR / "significance.csv")
+    comparison = {("abstract-abstract", "recall@10"): r"Fidelity, R@10",
+                  ("abstract-abstract", "recall@10=1"): r"Fidelity, R@10$=1$",
+                  ("title-abstract", "hit@10"): r"Title, hit@10",
+                  ("title-abstract", "rr@10"): r"Title, RR@10"}
     rows = []
-    for _, r in df.iterrows():
-        scenario = "Abs$\\rightarrow$abs" if r["scenario"] == "abstract-abstract" else "Title$\\rightarrow$abs"
-        metric = {"recall@10": "R@10", "recall@10=1": "R@10$=1$", "hit@10": "Hit@10", "rr@10": "RR@10"}[r["metric"]]
-        if r["test"] == "wilcoxon":
-            detail = f"$n$={int(r['n_nonzero'])}, $r$={r['effect_rank_biserial']:+.3f}, " \
-                     f"CI [{r['ci95_low']:+.4f}, {r['ci95_high']:+.4f}]"
-        else:
-            detail = f"$b$={r['discordant_ab_range']}, $c$={r['discordant_ba_range']}"
-        rows.append((scenario, f"{label(r['model_a'])} vs {label(r['model_b'])}", metric,
-                     r["test"].capitalize(), f"{r['mean_a']:.3f} / {r['mean_b']:.3f}", detail,
-                     f"{r['p_holm']:.1e}"))
+    for (a, b), pair in df.groupby(["model_a", "model_b"], sort=False):
+        rows.append(rf"\multicolumn{{5}}{{|l|}}{{\textit{{{label(a)} vs {label(b)}}}}} \\")
+        for _, r in pair.iterrows():
+            if r["test"] == "wilcoxon":
+                detail = f"$n$={int(r['n_nonzero'])}, $r$={r['effect_rank_biserial']:+.3f}, " \
+                         f"CI [{r['ci95_low']:+.4f}, {r['ci95_high']:+.4f}]"
+            else:
+                detail = f"$b$={r['discordant_ab_range']}, $c$={r['discordant_ba_range']}"
+            rows.append((comparison[(r["scenario"], r["metric"])],
+                         {"wilcoxon": "Wilcoxon", "mcnemar": "McNemar"}[r["test"]],
+                         f"{r['mean_a']:.3f} / {r['mean_b']:.3f}", detail, p_value(r["p_holm"])))
     return latex_table(
-        r"Paired tests over the same queries, Holm-adjusted. $n$: pairs with a difference; $r$: rank-biserial "
-        r"correlation; CI: 95\,\% paired bootstrap of the mean difference; $b$, $c$: discordant pairs over the builds.",
-        "significancia", "|l|l|l|l|c|l|c|",
-        ["Scenario", "Pair", "Metric", "Test", "Means", "Detail", r"$p_{\mathrm{Holm}}$"], rows)
+        rf"Paired tests at the reference configuration, Holm-adjusted over {len(df)} tests. Fidelity: "
+        r"abstract$\rightarrow$abstract against each model's exact search; Title: title$\rightarrow$abstract "
+        r"with exact search. $n$: queries with a difference; $r$: rank-biserial correlation; CI: 95\,\% paired "
+        r"bootstrap of the mean difference; $b$, $c$: discordant queries (range over the builds).",
+        "significancia", "|l|l|c|l|c|", ["Comparison", "Test", "Means", "Detail", r"$p_{\mathrm{Holm}}$"],
+        rows, size=r"\scriptsize")
 
 
 def escalabilidad(ref):
@@ -109,63 +139,87 @@ def escalabilidad(ref):
             cells = [f"{int(N):,}"]
             cells.append(f"{b['exact_ms']:.2f}" if pd.notna(b["exact_ms"]) else f"{a['exact_ms']:.2f}")
             for r in (a, b):
-                cells += ["--"] * 3 if pd.isna(r["hnsw_ms"]) else \
-                    [int(r["ef_search"]), f"{r['hnsw_ms']:.2f}", f"{r['speedup']:.0f}$\\times$"]
+                cells += ["--"] * 4 if pd.isna(r["hnsw_ms"]) else \
+                    [int(r["ef_search"]), f"{r['hnsw_ms']:.2f}", f"{r['speedup']:.0f}$\\times$",
+                     f"{r['speedup_batch']:.1f}$\\times$"]
             ok = b if pd.notna(b["build_time_s"]) else a
-            cells += [f"{ok['speedup_batch']:.1f}$\\times$", f"{ok['build_time_s']:.1f}", f"{ok['index_mb']:.0f}"]
+            cells += [f"{ok['build_time_s']:.0f}", f"{ok['index_mb']:.0f}"]
             rows.append(cells)
         tables.append(latex_table(
-            rf"Latency per query against corpus size ({label(model)}, $M={ref['M']}$, "
-            rf"\textit{{ef\_c}}$={ref['ef_construction']}$; one thread, one query at a time). HNSW uses the smallest "
-            rf"\textit{{ef\_search}} reaching each Recall@10 target. Batch: speedup when all queries run together on all threads, "
-            rf"at the {high} target.",
-            f"escalabilidad_{model}", "|r|c|c|c|c|c|c|c|c|c|c|",
-            ["$N$", "Exact (ms)", rf"\textit{{ef\_s}}$_{{{low}}}$", "ms", "Gain",
-             rf"\textit{{ef\_s}}$_{{{high}}}$", "ms", "Gain", "Batch", "Build (s)", "MB"], rows))
+            rf"Latency against corpus size ({label(model)}, $M={ref['M']}$, "
+            rf"\textit{{ef\_c}}$={ref['ef_construction']}$). Exact and HNSW latency in ms, one thread and one query "
+            rf"at a time; HNSW uses the smallest \textit{{ef\_search}} reaching each Recall@10 target. Gain: speedup "
+            rf"over exact search; Batch: the same with all queries together on {BATCH_THREADS} threads. Build time "
+            rf"(s, {cfg.BUILD_THREADS} threads) and memory (MB) of the index.",
+            f"escalabilidad_{model}", "|r|c|c|c|c|c|c|c|c|c|c|c|",
+            ["$N$", "Exact", r"\textit{ef\_s}", "ms", "Gain", "Batch", r"\textit{ef\_s}", "ms", "Gain", "Batch",
+             "Build", "MB"], rows,
+            group_header=rf" & & \multicolumn{{4}}{{c|}}{{\textbf{{R@10 $\geq$ {low}}}}} & "
+                         rf"\multicolumn{{4}}{{c|}}{{\textbf{{R@10 $\geq$ {high}}}}} & & \\ \cline{{3-10}}"))
     return "\n\n".join(tables)
 
 
 def e2e(ref):
     df = pd.read_csv(cfg.RESULTS_DIR / "end_to_end_latency.csv")
-    rows = [(label(r["model"]), r["device"].upper(), r["text"].capitalize(), f"{r['encode_ms']:.1f}",
-             f"{r['encode_p95_ms']:.1f}", f"{r['search_ms']:.2f}", f"{r['total_ms']:.1f}",
-             f"{100 * r['encode_share']:.1f}\\,\\%") for _, r in df.iterrows()]
+    df = df[df["device"] == "cpu"]
+    rows = []
+    for model in [m for m in cfg.ALL_MODELS if m in set(df["model"])]:
+        cells = [label(model)]
+        for text in ("title", "abstract"):
+            r = df[(df["model"] == model) & (df["text"] == text)].iloc[0]
+            cells += [f"{r['encode_ms']:.0f}", f"{r['encode_p95_ms']:.0f}", f"{r['search_ms']:.2f}",
+                      f"{r['total_ms']:.0f}"]
+        rows.append(cells)
+    share = 100 * df["encode_share"]
     return latex_table(
-        rf"End-to-end latency per query over {int(df['n'].iloc[0])} texts: query encoding plus HNSW search "
-        rf"($M={ref['M']}$, \textit{{ef\_c}}$={ref['ef_construction']}$, \textit{{ef\_s}}$={ref['ef_search']}$).",
-        "e2e", "|l|c|l|c|c|c|c|c|",
-        ["Model", "Device", "Text", "Encode (ms)", "p95 (ms)", "Search (ms)", "Total (ms)", "Encode share"], rows)
+        rf"End-to-end latency per query on the CPU, in ms, over {int(df['n'].iloc[0])} texts encoded one at a "
+        rf"time with {int(df['cpu_threads'].iloc[0])} threads, followed by HNSW search on one thread "
+        rf"($M={ref['M']}$, \textit{{ef\_c}}$={ref['ef_construction']}$, \textit{{ef\_s}}$={ref['ef_search']}$). "
+        rf"Encoding takes {share.min():.1f}--{share.max():.1f}\,\% of the total.",
+        "e2e", "|l|c|c|c|c|c|c|c|c|",
+        ["Model", "Encode", "p95", "Search", "Total", "Encode", "p95", "Search", "Total"], rows,
+        group_header=r" & \multicolumn{4}{c|}{\textbf{Title}} & \multicolumn{4}{c|}{\textbf{Abstract}} \\ \cline{2-9}")
 
 
 def familias(ref):
     df = pd.read_csv(cfg.RESULTS_DIR / "index_families_targets.csv")
+    points = pd.read_csv(cfg.RESULTS_DIR / "index_families.csv")
+    low, high = cfg.RECALL_TARGETS
     rows = []
-    for _, r in df.iterrows():
-        if pd.isna(r.get("latency_ms")):
-            rows.append((label(r["model"]), r["family"], r["target"],
-                         rf"\multicolumn{{4}}{{c|}}{{not reached (best {r['max_recall@10']:.3f})}}"))
-        else:
-            rows.append((label(r["model"]), r["family"], r["target"], f"{r['recall@10']:.3f}",
-                         f"{r['latency_ms']:.2f}", f"{r['build_time_s']:.1f}", f"{r['index_mb']:.0f}"))
+    for model, group in df.groupby("model", sort=False):
+        rows.append(rf"\multicolumn{{6}}{{|l|}}{{\textit{{{label(model)}}}}} \\")
+        for family, g in group.groupby("family", sort=False):
+            # La memoria y la construcción no dependen del parámetro de búsqueda
+            p = points[(points["model"] == model) & (points["family"] == family)].iloc[0]
+            cells = [family, f"{g['max_recall@10'].iloc[0]:.3f}"]
+            for target in (low, high):
+                r = g[g["target"] == target].iloc[0]
+                cells.append("--" if pd.isna(r["latency_ms"]) else f"{r['latency_ms']:.2f}")
+            cells += [f"{p['build_time_s']:.1f}", f"{p['index_mb']:.0f}"]
+            rows.append(cells)
     return latex_table(
-        r"Fastest option per index family and Recall@10 target (latency per query, one thread).",
-        "familias", "|l|l|c|c|c|c|c|",
-        ["Model", "Family", "Target", "R@10", "Lat. (ms)", "Build (s)", "MB"], rows)
+        rf"Index families on the same queries and ground truth (one thread, one query at a time). Best R@10: "
+        rf"highest Recall@10 over the search parameter; then the latency of the fastest setting reaching each "
+        rf"target (--: not reached). Build time includes training.",
+        "familias", "|l|c|c|c|c|c|",
+        ["Family", "Best R@10", rf"ms, R@10$\geq${low}", rf"ms, R@10$\geq${high}", "Build (s)", "MB"], rows)
 
 
 def modelos(ref):
     df = pd.read_csv(cfg.RESULTS_DIR / "model_comparison.csv")
-    rows = [(r["label"], r["domain"].capitalize(), "Yes" if r["retrieval_trained"] else "No", int(r["dim"]),
+    rows = [(r["label"], r["domain"].capitalize(), TRAINING[r["model"]], int(r["dim"]),
              f"{r['fidelity_r10']:.3f}", f"{r['search_ms']:.2f}", f"{r['title_r1']:.3f}", f"{r['title_r10']:.3f}",
-             f"{r['title_mrr10']:.3f}", "--" if pd.isna(r["encode_title_cpu_ms"]) else f"{r['encode_title_cpu_ms']:.0f}")
+             f"{r['title_mrr10']:.3f}")
             for _, r in df.iterrows()]
     return latex_table(
-        rf"Effect of domain and training objective at the reference configuration ($M={ref['M']}$, "
-        rf"\textit{{ef\_c}}$={ref['ef_construction']}$, \textit{{ef\_s}}$={ref['ef_search']}$). Fidelity: abstract$\rightarrow$abstract "
-        r"Recall@10 against exact search. Retrieval: title$\rightarrow$abstract with exact search.",
-        "modelos", "|l|l|c|c|c|c|c|c|c|c|",
-        ["Model", "Domain", "Retrieval training", "Dim.", "Fid. R@10", "Search (ms)", "R@1", "R@10", "MRR@10",
-         "Encode (ms)"], rows)
+        rf"Domain against training objective at the reference configuration ($M={ref['M']}$, "
+        rf"\textit{{ef\_c}}$={ref['ef_construction']}$, \textit{{ef\_s}}$={ref['ef_search']}$). Fidelity: "
+        r"abstract$\rightarrow$abstract Recall@10 of HNSW against exact search, and search latency on one thread. "
+        r"Retrieval: title$\rightarrow$abstract with exact search.",
+        "modelos", "|l|l|l|c|c|c|c|c|c|",
+        ["Model", "Domain", "Training", "Dim.", "R@10", "ms", "R@1", "R@10", "MRR@10"], rows,
+        group_header=r"\multicolumn{4}{|c|}{} & \multicolumn{2}{c|}{\textbf{Fidelity}} & "
+                     r"\multicolumn{3}{c|}{\textbf{Retrieval}} \\ \cline{5-9}")
 
 
 def main():
