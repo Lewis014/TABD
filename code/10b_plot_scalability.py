@@ -19,10 +19,15 @@ ps.apply()
 models = [m for m in cfg.ALL_MODELS
           if (cfg.RESULTS_DIR / f"scalability_targets_{m}.csv").exists()]
 
+frames = {m: pd.read_csv(cfg.RESULTS_DIR / f"scalability_targets_{m}.csv") for m in models}
+# El eje y es compartido: los límites salen de todos los paneles, no del último
+y_low = min(min(df["hnsw_ms"].min(), df["exact_ms"].min()) for df in frames.values()) * 0.8
+y_high = max(max(df["hnsw_ms"].max(), df["exact_ms"].max()) for df in frames.values()) * 1.25
+
 fig, axes = plt.subplots(1, len(models), figsize=(1.2 + 4.0 * len(models), 3.2),
                          sharey=True, squeeze=False)
 for ax, model in zip(axes[0], models):
-    df = pd.read_csv(cfg.RESULTS_DIR / f"scalability_targets_{model}.csv")
+    df = frames[model]
 
     exact = df.dropna(subset=["exact_ms"]).drop_duplicates("N").sort_values("N")
     ax.plot(exact["N"], exact["exact_ms"], marker="s", color=ps.SERIES[1], label="Exact search")
@@ -34,8 +39,7 @@ for ax, model in zip(axes[0], models):
     ax.set_xscale("log")
     ax.set_yscale("log")
     ps.plain_ticks(ax.yaxis, [0.1, 0.2, 0.5, 1, 2, 5, 10, 20, 50, 100, 200, 500])
-    ax.set_ylim(min(df["hnsw_ms"].min(), exact["exact_ms"].min()) * 0.8,
-                max(df["hnsw_ms"].max(), exact["exact_ms"].max()) * 1.25)
+    ax.set_ylim(y_low, y_high)
     ax.set_xticks(exact["N"])
     ax.set_xticklabels([f"{n / 1000:.0f}k" for n in exact["N"]])
     ax.xaxis.set_minor_locator(plt.NullLocator())
@@ -44,5 +48,5 @@ for ax, model in zip(axes[0], models):
         ax.set_title(cfg.ALL_MODELS[model]["label"], fontsize=9)
 
 axes[0][0].set_ylabel("Latency per query (ms, log scale)")
-axes[0][0].legend(loc="center right")
+axes[0][0].legend(loc="upper left")
 ps.save(fig, "fig_scalability.png")

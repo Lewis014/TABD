@@ -1,0 +1,4 @@
+model,curve,n_points,slope,ci95_low,ci95_high,r2
+e5_base,exact,7,1.0001,0.9644,1.0358,0.999
+e5_base,hnsw@0.95,7,0.385,0.2575,0.5125,0.9234
+e5_base,hnsw@0.99,7,0.5347,0.4768,0.5926,0.9912

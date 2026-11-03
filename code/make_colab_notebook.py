@@ -40,7 +40,7 @@ def code(text, hidden=False):
 
 SETUP = """
 #@title 1. Preparar el entorno
-import base64, glob, io, os, shutil, zipfile
+import base64, glob, io, os, zipfile
 import torch
 from google.colab import drive
 
@@ -119,8 +119,8 @@ print("Drive sincronizado. Revisa en la carpeta que estén los 12 archivos.")
 SCALE_INTRO = """
 # Pool de escalabilidad (E5-base)
 
-Vectoriza hasta 1 millón de abstracts en tramos de 50 000, de unos 150 MB cada uno. Antes de empezar
-mide el espacio libre en Drive y **se detiene antes de llenarlo**.
+Vectoriza abstracts en tramos de 50 000, de unos 150 MB cada uno, hasta el número de tramos elegido en la
+celda 3. **Comprueba antes que Drive tenga ese espacio libre**: si se llena, los archivos no se suben.
 
 **Cómo usarlo**
 
@@ -129,30 +129,28 @@ mide el espacio libre en Drive y **se detiene antes de llenarlo**.
 3. Deja la pestaña abierta, con la tapa de la laptop abierta y sin suspender el equipo.
 
 **Si se corta o se acaba la GPU gratis:** vuelve a **Ejecutar todo**, aunque sea otro día. Lo que ya está
-hecho se salta. Con 500 000 abstracts (10 tramos) ya es suficiente; puedes parar ahí.
+hecho se salta.
 
 Cada línea de avance indica cuánto tardó ese tramo. Todo queda en `tabd_scale_e5_base/` en Google Drive.
 """
 
 SCALE_PLAN = """
-#@title 3. Ver cuántos tramos caben en Drive
+#@title 3. Elegir qué tramos generar
+PRIMER_TRAMO = 7  #@param {type:"integer"}
+ULTIMO_TRAMO = 10  #@param {type:"integer"}
 CHUNK_VECTORS = 50_000
-CHUNK_BYTES = CHUNK_VECTORS * 768 * 4
-MARGIN_BYTES = 300 * 2**20
 
-done = len(glob.glob(f"{OUT}/part_e5_base_*.npy"))
-free = shutil.disk_usage("/content/drive/MyDrive").free
-fits = max(0, free - MARGIN_BYTES) // CHUNK_BYTES
-parts = min(20, done + fits)
-print(f"Libre en Drive: {free / 2**30:.2f} GB | tramos hechos: {done} | caben {fits} más")
-assert parts > 0, "No hay espacio libre en Drive: libera al menos 500 MB y vuelve a ejecutar."
-STOP_AFTER = parts * CHUNK_VECTORS
-print(f"Objetivo: {STOP_AFTER:,} abstracts ({parts} tramos)")
+wanted = range(PRIMER_TRAMO, ULTIMO_TRAMO + 1)
+missing = sum(not os.path.exists(f"{OUT}/part_e5_base_{(t - 1) * CHUNK_VECTORS:08d}.npy") for t in wanted)
+START_AT = (PRIMER_TRAMO - 1) * CHUNK_VECTORS
+STOP_AFTER = ULTIMO_TRAMO * CHUNK_VECTORS
+print(f"Tramos {PRIMER_TRAMO} a {ULTIMO_TRAMO}: faltan {missing}.")
+print(f"Comprueba que Drive tenga libres al menos {missing * 150 + 300} MB: Colab no puede medirlo aquí.")
 """
 
 SCALE = """
 #@title 4. Vectorizar (varias horas; se puede retomar)
-!python colab_embed_scale.py --model e5_base --n 1000000 --stop-after {STOP_AFTER} --batch-size 64 --out "{OUT}"
+!python colab_embed_scale.py --model e5_base --n 1000000 --start-at {START_AT} --stop-after {STOP_AFTER} --batch-size 64 --out "{OUT}"
 """
 
 SCALE_END = """

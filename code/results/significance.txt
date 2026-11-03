@@ -1,26 +1,26 @@
 Pruebas pareadas en la configuración de referencia {'M': 32, 'ef_construction': 100, 'ef_search': 100} (alpha=0.05, Holm sobre 24 pruebas)
 
-abstract-abstract  recall@10    scibert vs e5: 0.9970 vs 0.9922 | Wilcoxon W=6870.0 n=223 r=+0.450 IC95=[+0.0032, +0.0067] | p=3.47e-09 p_holm=4.17e-08 *
-abstract-abstract  recall@10=1  scibert vs e5: 0.9732 vs 0.9322 | McNemar b=61-73 c=21-32 | p=3.46e-03 p_holm=3.12e-02 *
+abstract-abstract  recall@10    scibert vs e5: 0.9971 vs 0.9919 | Wilcoxon W=6844.0 n=225 r=+0.462 IC95=[+0.0035, +0.0071] | p=1.11e-09 p_holm=1.44e-08 *
+abstract-abstract  recall@10=1  scibert vs e5: 0.9736 vs 0.9308 | McNemar b=56-74 c=21-31 | p=4.90e-04 p_holm=4.90e-03 *
 title-abstract     hit@10       scibert vs e5: 0.1730 vs 0.9490 | McNemar b=1-1 c=777-777 | p=9.80e-232 p_holm=2.35e-230 *
 title-abstract     rr@10        scibert vs e5: 0.0926 vs 0.8993 | Wilcoxon W=576.5 n=888 r=-0.997 IC95=[-0.8279, -0.7848] | p=2.23e-166 p_holm=5.14e-165 *
-abstract-abstract  recall@10    scibert vs scincl: 0.9970 vs 0.9983 | Wilcoxon W=2294.0 n=111 r=-0.262 IC95=[-0.0022, -0.0003] | p=1.42e-02 p_holm=1.14e-01
-abstract-abstract  recall@10=1  scibert vs scincl: 0.9732 vs 0.9844 | McNemar b=12-18 c=21-31 | p=7.49e-01 p_holm=1.00e+00
+abstract-abstract  recall@10    scibert vs scincl: 0.9971 vs 0.9983 | Wilcoxon W=2160.0 n=107 r=-0.252 IC95=[-0.0022, -0.0002] | p=2.06e-02 p_holm=1.65e-01
+abstract-abstract  recall@10=1  scibert vs scincl: 0.9736 vs 0.9844 | McNemar b=11-19 c=21-30 | p=6.27e-01 p_holm=1.00e+00
 title-abstract     hit@10       scibert vs scincl: 0.1730 vs 0.7460 | McNemar b=12-12 c=585-585 | p=1.51e-155 p_holm=3.32e-154 *
 title-abstract     rr@10        scibert vs scincl: 0.0926 vs 0.5999 | Wilcoxon W=5189.5 n=705 r=-0.958 IC95=[-0.5362, -0.4785] | p=5.22e-113 p_holm=9.92e-112 *
-abstract-abstract  recall@10    scibert vs specter2: 0.9970 vs 0.9980 | Wilcoxon W=3385.5 n=129 r=-0.192 IC95=[-0.0019, +0.0000] | p=5.06e-02 p_holm=3.54e-01
-abstract-abstract  recall@10=1  scibert vs specter2: 0.9732 vs 0.9806 | McNemar b=15-23 c=22-33 | p=1.00e+00 p_holm=1.00e+00
+abstract-abstract  recall@10    scibert vs specter2: 0.9971 vs 0.9979 | Wilcoxon W=3475.5 n=129 r=-0.171 IC95=[-0.0019, +0.0002] | p=8.20e-02 p_holm=5.74e-01
+abstract-abstract  recall@10=1  scibert vs specter2: 0.9736 vs 0.9804 | McNemar b=15-23 c=23-32 | p=1.00e+00 p_holm=1.00e+00
 title-abstract     hit@10       scibert vs specter2: 0.1730 vs 0.7540 | McNemar b=15-15 c=596-596 | p=9.59e-155 p_holm=2.01e-153 *
 title-abstract     rr@10        scibert vs specter2: 0.0926 vs 0.6072 | Wilcoxon W=6478.0 n=719 r=-0.950 IC95=[-0.5440, -0.4849] | p=1.94e-113 p_holm=3.88e-112 *
-abstract-abstract  recall@10    bert vs scibert: 0.9965 vs 0.9970 | Wilcoxon W=4295.5 n=136 r=-0.078 IC95=[-0.0017, +0.0006] | p=4.19e-01 p_holm=1.00e+00
-abstract-abstract  recall@10=1  bert vs scibert: 0.9698 vs 0.9732 | McNemar b=19-28 c=23-29 | p=1.00e+00 p_holm=1.00e+00
+abstract-abstract  recall@10    bert vs scibert: 0.9964 vs 0.9971 | Wilcoxon W=4144.5 n=135 r=-0.097 IC95=[-0.0019, +0.0004] | p=3.16e-01 p_holm=1.00e+00
+abstract-abstract  recall@10=1  bert vs scibert: 0.9684 vs 0.9736 | McNemar b=19-28 c=24-30 | p=1.00e+00 p_holm=1.00e+00
 title-abstract     hit@10       bert vs scibert: 0.1750 vs 0.1730 | McNemar b=79-79 c=77-77 | p=9.36e-01 p_holm=1.00e+00
 title-abstract     rr@10        bert vs scibert: 0.0937 vs 0.0926 | Wilcoxon W=12328.5 n=224 r=+0.022 IC95=[-0.0152, +0.0169] | p=7.80e-01 p_holm=1.00e+00
-abstract-abstract  recall@10    scincl vs e5_base: 0.9983 vs 0.9863 | Wilcoxon W=2851.5 n=275 r=+0.850 IC95=[+0.0101, +0.0139] | p=6.26e-35 p_holm=1.00e-33 *
-abstract-abstract  recall@10=1  scincl vs e5_base: 0.9844 vs 0.8828 | McNemar b=107-125 c=10-17 | p=3.21e-20 p_holm=4.81e-19 *
+abstract-abstract  recall@10    scincl vs e5_base: 0.9983 vs 0.9862 | Wilcoxon W=2619.5 n=274 r=+0.861 IC95=[+0.0103, +0.0140] | p=1.11e-35 p_holm=1.77e-34 *
+abstract-abstract  recall@10=1  scincl vs e5_base: 0.9844 vs 0.8820 | McNemar b=107-126 c=8-17 | p=1.50e-19 p_holm=2.24e-18 *
 title-abstract     hit@10       scincl vs e5_base: 0.7460 vs 0.9220 | McNemar b=21-21 c=197-197 | p=4.92e-37 p_holm=8.36e-36 *
 title-abstract     rr@10        scincl vs e5_base: 0.5999 vs 0.8511 | Wilcoxon W=7674.5 n=440 r=-0.842 IC95=[-0.2776, -0.2237] | p=1.35e-53 p_holm=2.43e-52 *
-abstract-abstract  recall@10    e5_base vs e5: 0.9863 vs 0.9922 | Wilcoxon W=15999.0 n=322 r=-0.385 IC95=[-0.0081, -0.0036] | p=1.68e-09 p_holm=2.18e-08 *
-abstract-abstract  recall@10=1  e5_base vs e5: 0.8828 vs 0.9322 | McNemar b=46-58 c=90-113 | p=2.02e-04 p_holm=2.02e-03 *
+abstract-abstract  recall@10    e5_base vs e5: 0.9862 vs 0.9919 | Wilcoxon W=16276.0 n=323 r=-0.378 IC95=[-0.0080, -0.0035] | p=2.98e-09 p_holm=3.58e-08 *
+abstract-abstract  recall@10=1  e5_base vs e5: 0.8820 vs 0.9308 | McNemar b=48-57 c=91-111 | p=9.95e-04 p_holm=8.95e-03 *
 title-abstract     hit@10       e5_base vs e5: 0.9220 vs 0.9490 | McNemar b=8-8 c=35-35 | p=4.19e-05 p_holm=4.61e-04 *
 title-abstract     rr@10        e5_base vs e5: 0.8511 vs 0.8993 | Wilcoxon W=1452.0 n=140 r=-0.706 IC95=[-0.0612, -0.0360] | p=3.53e-13 p_holm=4.94e-12 *

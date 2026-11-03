@@ -8,65 +8,67 @@ Las líneas `L…` se refieren a `paper_en.tex`.
 
 ---
 
-## 0. Estado (31 de octubre de 2026)
+## 0. Estado (3 de noviembre de 2026)
 
-**Hecho:** código corregido en la rama `revision-paper-54`, experimentos locales repetidos, figuras en inglés y notebook de Colab listo.
+**Hecho:** código corregido en la rama `revision-paper-54`, pool de escalabilidad completo, corrida final limpia terminada y figuras en inglés. Falta solo el texto.
 
 **Falta, en orden:**
-1. Terminar `code/colab_scale.ipynb` en Colab (E5-base, 500 000 a 1 000 000 de abstracts) y copiar los tramos a `code/data/scale_e5_base/`.
-2. Medir la escalabilidad con ese pool.
-3. **Corrida final limpia** con `bash code/run_experiments.sh`, sin usar el equipo mientras corre. En la corrida de hoy, otro proceso duplicó la latencia de dos construcciones.
-4. Reescribir el artículo y la carta a los revisores.
+1. ~~Pool de escalabilidad E5-base.~~ Hecho el 2 de noviembre: 10 tramos, 500 000 abstracts en `code/data/scale_e5_base/`. Los tramos 1–6 salieron de la cuenta UNSA y los 7–10 de la de Gmail, porque Colab llegó a su límite de GPU gratis. Las dos cuentas produjeron el mismo meta, byte a byte. Los abstracts que también están en el corpus principal dan coseno 1.00000 con sus vectores, así que vectores e ids están alineados.
+2. ~~Medir la escalabilidad con ese pool.~~ Hecho; `Images/fig_scalability.png` tiene ahora dos paneles: SciBERT hasta 100k y E5-base hasta 500k.
+3. ~~Corrida final limpia.~~ Hecha del 2 al 3 de noviembre (23:43–01:32) con `run_experiments.sh` bajo `keep_awake.py`, sin usar el equipo y con el cargador conectado. Terminó sin errores y los ids congelados de `splits/` no cambiaron. Registro en `code/results/run_final.log`.
+4. **Reescribir el artículo y la carta a los revisores.**
 
-Estas cifras son las de hoy. El recall será casi igual en la corrida final; las latencias pueden moverse un poco. Los tiempos del benchmark son la mediana de 5 construcciones. Los de escalabilidad son la media de 3 y los de familias de índices salen de una sola construcción; la corrida final deja los de escalabilidad también en mediana.
+Todas las cifras de esta sección salen de esa corrida. Los tiempos del benchmark son la mediana de 5 construcciones. Los de escalabilidad son la mediana de 3, o de una sola desde 500k. Los de familias de índices salen de una sola construcción.
 
 | Afirmación | Paper enviado | Medición corregida |
 |---|---|---|
 | Consultas dentro del corpus | 982 de 1 000 (sin declarar) | 0, con 48 018 documentos indexados |
-| Peor Recall@10 con ef_search=50 | 0.946 | 0.884 |
-| M=32, ef_c=400, ef_search=50, SciBERT / E5 | 0.998 / 0.995 | 0.991 / 0.977 |
+| Peor Recall@10 con ef_search=50 | 0.946 | 0.883 |
+| M=32, ef_c=400, ef_search=50, SciBERT / E5 | 0.998 / 0.995 | 0.991 / 0.976 |
 | Configuración de referencia | "Óptima": M=32, ef_c=400, ef_search=50 | Menor latencia con R@10 ≥ 0.99 en ambos modelos: M=32, ef_c=100, ef_search=100 |
-| En esa configuración, SciBERT / E5 | — | R@10 0.997 / 0.992; 0.66 / 0.98 ms; 11 / 22 s; 153 / 200 MB |
-| Coste de subir ef_c de 100 a 400 | "Casi duplica" | ×2.7 a ×3.6 en construcción, por +0.001 a +0.007 de R@10 de media |
+| En esa configuración, SciBERT / E5 | — | R@10 0.997 / 0.992; 0.60 / 0.87 ms; 12 / 20 s; 153 / 200 MB |
+| Coste de subir ef_c de 100 a 400 | "Casi duplica" | ×2.9 a ×3.3 en construcción, por +0.005 (SciBERT) y +0.003 (E5) de R@10 de media |
 | Memoria según M (de 8 a 32) | Sin medir | Solo +5 % a +6 %: dominan los vectores |
 | MRR frente a R@1 en fidelidad | "Confirma desde otro ángulo" | Iguales en 108 de 108 puntos |
-| Fidelidad SciBERT vs E5 | +0.003, en el nivel del ruido | +0.005, IC 95 % [+0.003, +0.007]; p Holm 7e-9; se distingue del ruido (d.e. 0.0004) |
+| Fidelidad SciBERT vs E5 | +0.003, en el nivel del ruido | +0.005, IC 95 % [+0.004, +0.007]; p Holm 1e-8; se distingue del ruido (d.e. 0.0004) |
 | Título→abstract R@10, búsqueda exacta | 0.194 vs 0.953 (con HNSW) | 0.173 vs 0.949; rango mediano 259 vs 1; 1 vs 777 pares discordantes |
-| Título→abstract R@10, HNSW | Igual que arriba | 0.163 vs 0.944 |
-| HNSW frente a exacta, una consulta y 1 hilo | Sin medir | HNSW gana en todo el rango: ×5 a ×28 con R@10 ≥ 0.99 |
-| HNSW frente a exacta, en lote con 12 hilos | Cruce cerca de 60 000 | Casi empate hasta 100k: ×0.5 a ×1.1. Explica el "cruce" |
-| Pendiente log-log hasta 100k | "Sublineal" y "exponencial" | Exacta 0.95 [0.88, 1.02]; HNSW a R@10 ≥ 0.99, 0.43 [0.27, 0.58] |
-| Vectorizar más buscar, título en CPU, SciBERT / E5 | Sin medir | 46 / 202 ms; vectorizar es más del 98 % del tiempo |
+| Título→abstract R@10, HNSW | Igual que arriba | 0.164 vs 0.944 |
+| HNSW frente a exacta, SciBERT hasta 100k, una consulta y 1 hilo | Sin medir | HNSW gana en todo el rango: ×7 a ×29 con R@10 ≥ 0.99 |
+| HNSW frente a exacta, SciBERT hasta 100k, en lote con 12 hilos | Cruce cerca de 60 000 | Casi empate: ×0.7 a ×1.2 con R@10 ≥ 0.99 y ×1.1 a ×1.8 con ≥ 0.95. Explica el "cruce" |
+| Pendiente log-log, SciBERT hasta 100k | "Sublineal" y "exponencial" | Exacta 1.00 [0.92, 1.07]; HNSW a R@10 ≥ 0.99, 0.52 [0.41, 0.63] |
+| Escalabilidad con E5-base hasta 500k, una consulta y 1 hilo | Sin medir | Exacta 1.1 → 107 ms; HNSW a R@10 ≥ 0.99, 0.28 → 3.3 ms (ef_search 75 → 300). Ventaja ×4 a ×32 |
+| Pendiente log-log con E5-base hasta 500k | Sin medir | Exacta 1.00 [0.96, 1.04]; HNSW a R@10 ≥ 0.99, 0.54 [0.48, 0.59]; a ≥ 0.95, 0.39 [0.26, 0.51] |
+| E5-base en lote con 12 hilos | Sin medir | A R@10 ≥ 0.99 la exacta gana hasta 200k (×0.3 a ×0.6) y HNSW gana en 500k (×1.3). A ≥ 0.95 empatan en 100k (×1.0) y HNSW gana desde 200k (×1.9 a ×4.8) |
+| Coste del índice E5-base a 500k | Sin medir | 299 s de construcción con 6 hilos; 1.6 GB |
+| Vectorizar más buscar, título en CPU, SciBERT / E5 | Sin medir | 37 / 166 ms; vectorizar es más del 98 % del tiempo |
 
 **Otras familias de índices, con R@10 ≥ 0.99 (SciBERT / E5):**
-- **HNSW:** 0.64 / 1.06 ms.
-- **IVF-Flat:** 2.22 / 4.28 ms, pero se construye entre 4 y 6 veces más rápido.
+- **HNSW:** 0.61 / 0.73 ms. Es una sola construcción, por eso difiere algo de la mediana del benchmark (0.60 / 0.87 ms).
+- **IVF-Flat:** 2.03 / 4.38 ms, pero se construye entre 4 y 6 veces más rápido (2.7 / 3.3 s frente a 11.9 / 19.2 s).
 - **IVF-PQ con OPQ:** no llega; se queda en 0.737 / 0.611, a cambio de ocupar muy poca memoria. PQ con producto interno y sin OPQ no pasaba de 0.235 / 0.366, así que esa configuración se descartó por injusta.
-- **IVF-PQ con OPQ y reordenamiento:** 1.21 ms en SciBERT; E5 no llega y se queda en 0.983. Ocupa casi lo mismo que HNSW, porque guarda los vectores, y OPQ tarda más de 8 minutos en entrenar.
-- **BallTree (árbol exacto):** 78 / 79 ms, más lento que la búsqueda exacta (9 / 17 ms) y con el doble de memoria.
+- **IVF-PQ con OPQ y reordenamiento:** 1.21 ms en SciBERT; E5 no llega y se queda en 0.983. Ocupa casi lo mismo que HNSW, porque guarda los vectores, y entrenar OPQ tarda 462 / 653 s.
+- **BallTree (árbol exacto):** 47 / 60 ms, más lento que la búsqueda exacta (10 / 12 ms) y con el doble de memoria.
 - **Annoy (árbol aproximado):** no evaluado; se declara como limitación.
-
-La construcción de 3 366 s de E5 en `index_families.csv` no vale: incluye 44 minutos de una suspensión del equipo. Se corrige en la corrida final.
 
 **Dominio frente a objetivo de entrenamiento (configuración de referencia):**
 
 | Modelo | Dominio | Entrenamiento | Dim. | Fidelidad R@10 | Título→abstract R@10 (exacta) | Título→abstract MRR@10 | Búsqueda (ms) |
 |---|---|---|---|---|---|---|---|
-| BERT | General | Ninguno para recuperación | 768 | 0.996 | 0.175 | 0.094 | 0.60 |
-| SciBERT | Científico | Ninguno para recuperación | 768 | 0.997 | 0.173 | 0.093 | 0.66 |
-| SciNCL | Científico | Citas; parte de SciBERT | 768 | 0.998 | 0.746 | 0.600 | 0.49 |
-| SPECTER2 | Científico | Citas; adaptador de consulta | 768 | 0.998 | 0.754 | 0.607 | 0.68 |
-| E5-base | General | Pares consulta-documento | 768 | 0.986 | 0.922 | 0.851 | 0.88 |
-| E5-large | General | Pares consulta-documento | 1024 | 0.992 | 0.949 | 0.899 | 0.98 |
+| BERT | General | Ninguno para recuperación | 768 | 0.996 | 0.175 | 0.094 | 0.58 |
+| SciBERT | Científico | Ninguno para recuperación | 768 | 0.997 | 0.173 | 0.093 | 0.60 |
+| SciNCL | Científico | Citas; parte de SciBERT | 768 | 0.998 | 0.746 | 0.600 | 0.45 |
+| SPECTER2 | Científico | Citas; adaptador de consulta | 768 | 0.998 | 0.754 | 0.607 | 0.63 |
+| E5-base | General | Pares consulta-documento | 768 | 0.986 | 0.922 | 0.851 | 0.75 |
+| E5-large | General | Pares consulta-documento | 1024 | 0.992 | 0.949 | 0.899 | 0.87 |
 
 Qué permite afirmar, con corrección de Holm sobre 24 pruebas:
 - **El dominio solo no aporta:** BERT y SciBERT no se distinguen en título→abstract (p Holm = 1.0).
 - **El objetivo de entrenamiento sí:** SciBERT frente a SciNCL, que parte de sus pesos, pasa de 0.173 a 0.746 (p Holm ≈ 3e-154).
 - **Entre los entrenados, mejor los de consulta-documento en esta tarea:** SciNCL 0.746 frente a E5-base 0.922, ambos de 768d. Aquí cambian a la vez el dominio y el tipo de entrenamiento, así que no se puede atribuir a uno solo.
 - **La fidelidad casi no depende del modelo:** todos están entre 0.986 y 0.998. Fidelidad y recuperación son dimensiones distintas.
-- **La dimensión no explica el costo por sí sola:** con 768d, la búsqueda va de 0.49 a 0.88 ms. E5-base tiene menos dimensiones que E5-large y aun así menos fidelidad. L289 debe corregirse.
+- **La dimensión no explica el costo por sí sola:** con 768d, la búsqueda va de 0.45 a 0.75 ms. E5-base tiene menos dimensiones que E5-large y aun así menos fidelidad. L289 debe corregirse.
 
-**Vectorizar una consulta en CPU (título / abstract):** SciBERT 42 / 157 ms, SciNCL 48 / 170 ms, BERT 50 / 183 ms, E5-base 55 / 190 ms, E5-large 185 / 591 ms. SPECTER2 no se midió: `adapters` exige otra versión de `transformers`. E5-base vectoriza títulos unas 3.3 veces más rápido que E5-large y pierde 0.027 de Recall@10. Los vectores de SciNCL, BERT y E5-base generados en Colab coinciden con los locales (coseno 1.000 en las filas comprobadas), así que las filas están bien alineadas.
+**Vectorizar una consulta en CPU (título / abstract):** SciBERT 37 / 149 ms, SciNCL 45 / 154 ms, BERT 46 / 165 ms, E5-base 47 / 159 ms, E5-large 165 / 562 ms. SPECTER2 no se midió: `adapters` exige otra versión de `transformers`. E5-base vectoriza títulos unas 3.5 veces más rápido que E5-large y pierde 0.027 de Recall@10. Los vectores de SciNCL, BERT y E5-base generados en Colab coinciden con los locales (coseno 1.000 en las filas comprobadas), así que las filas están bien alineadas.
 
 Limitaciones que hay que declarar: SciNCL y SPECTER2 reciben solo el abstract, no `título [SEP] abstract`, para no filtrar la respuesta; y título→abstract es una tarea concreta, que no equivale a juicios humanos de relevancia.
 

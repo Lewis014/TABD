@@ -10,7 +10,8 @@ Una vectorización de horas puede cortarse, así que guarda por tramos en --out 
 que esté en Google Drive) y retoma donde quedó al volver a ejecutar. La muestra se baraja
 de forma fija: aunque no se llegue a terminar, los tramos hechos son una muestra aleatoria
 y sirven igual. --stop-after detiene el trabajo en esa cantidad de vectores sin cambiar la
-muestra, por ejemplo para no pasarse del espacio disponible.
+muestra, por ejemplo para no pasarse del espacio disponible. --start-at deja que otra cuenta
+de Google continúe el trabajo: la muestra es la misma y los tramos se juntan después.
 
 Por defecto usa E5-base: es de la misma familia que E5-large y tarda cerca de la mitad.
 
@@ -41,6 +42,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--model", default="e5_base", choices=list(cfg.ALL_MODELS))
     parser.add_argument("--n", type=int, default=1_000_000)
+    parser.add_argument("--start-at", type=int, default=0)
     parser.add_argument("--stop-after", type=int, default=None)
     parser.add_argument("--batch-size", type=int, default=cfg.BATCH_SIZE)
     parser.add_argument("--out", type=Path, default=None)
@@ -64,7 +66,7 @@ def main():
     model = None
     texts = subset["abstract"].tolist()
     last = min(args.stop_after or len(texts), len(texts))
-    for start in range(0, last, CHUNK):
+    for start in range(args.start_at, last, CHUNK):
         part = out / f"part_{args.model}_{start:08d}.npy"
         if part.exists():
             continue

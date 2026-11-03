@@ -39,7 +39,6 @@ ax.set_xscale("log", base=2)
 ax.set_xticks(cfg.M_VALUES)
 ax.set_xticklabels(cfg.M_VALUES)
 ax.set_xlim(7, 48)
-ax.legend(loc="lower right")
 ps.save(fig, "fig_recall_vs_m.png")
 
 
