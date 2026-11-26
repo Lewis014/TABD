@@ -1,0 +1,7 @@
+model,label,domain,retrieval_trained,dim,fidelity_r1,fidelity_r10,fidelity_r10_sd,search_ms,build_time_s,index_mb,title_r1,title_r5,title_r10,title_mrr10,title_r10_hnsw,title_sim_own,title_median_rank,encode_title_cpu_ms
+scibert,SciBERT,scientific,False,768,0.9994,0.9971,0.0004,0.6037,12.0287,153.144,0.061,0.131,0.173,0.0926,0.164,0.7306,259.0,36.6627
+scincl,SciNCL,scientific,True,768,0.9978,0.9983,0.0004,0.4467,8.8836,153.144,0.527,0.7,0.746,0.5999,0.7333,0.9092,1.0,45.0509
+specter2,SPECTER2,scientific,True,768,0.9988,0.9979,0.0003,0.6304,12.3748,153.144,0.539,0.698,0.754,0.6072,0.7233,0.7736,1.0,
+bert,BERT,general,False,768,0.9996,0.9964,0.0003,0.576,10.6799,153.144,0.064,0.132,0.175,0.0937,0.1597,0.7707,279.5,46.0051
+e5_base,E5-base,general,True,768,0.9922,0.9862,0.0007,0.7515,16.7636,153.144,0.813,0.9,0.922,0.8511,0.9133,0.875,1.0,47.4789
+e5,E5-large,general,True,1024,0.9982,0.9919,0.0005,0.8741,19.7297,200.0366,0.869,0.941,0.949,0.8993,0.9437,0.8745,1.0,164.9866

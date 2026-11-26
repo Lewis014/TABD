@@ -1,0 +1,17 @@
+\begin{table}[tbp]
+\caption{End-to-end latency per query on the CPU, in ms, over 200 texts encoded one at a time with 6 threads, followed by HNSW search on one thread ($M=32$, \textit{ef\_c}$=100$, \textit{ef\_s}$=100$). Encoding takes 98.1--99.8\,\% of the total.}\label{tab:e2e}
+\centering
+\small
+\begin{tabular}{|l|c|c|c|c|c|c|c|c|}
+\hline
+ & \multicolumn{4}{c|}{\textbf{Title}} & \multicolumn{4}{c|}{\textbf{Abstract}} \\ \cline{2-9}
+\textbf{Model} & \textbf{Encode} & \textbf{p95} & \textbf{Search} & \textbf{Total} & \textbf{Encode} & \textbf{p95} & \textbf{Search} & \textbf{Total} \\
+\hline
+SciBERT & 37 & 43 & 0.46 & 37 & 149 & 266 & 0.68 & 150 \\
+E5-large & 165 & 189 & 0.85 & 166 & 562 & 993 & 0.94 & 563 \\
+SciNCL & 45 & 55 & 0.56 & 46 & 154 & 284 & 0.49 & 155 \\
+BERT & 46 & 53 & 0.41 & 46 & 165 & 301 & 0.49 & 165 \\
+E5-base & 47 & 57 & 0.91 & 48 & 159 & 279 & 0.87 & 160 \\
+\hline
+\end{tabular}
+\end{table}

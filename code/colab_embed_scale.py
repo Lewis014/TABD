@@ -1,73 +1,84 @@
 """
-FASE A (escalabilidad) — Embeddings de 100k para el estudio de O9 (Google Colab, GPU)
-=====================================================================================
+FASE A (escalabilidad) — Pool grande de embeddings (Google Colab, GPU)
+=====================================================================
 
-Genera un corpus más grande, SOLO con SciBERT, para el análisis de escalabilidad
-(observación O9): latencia de HNSW vs. búsqueda exacta a tamaños crecientes.
+Genera un pool grande de vectores del que 10_scalability.py toma subconjuntos anidados.
+No re-hace el experimento principal: las 1000 consultas originales se reutilizan tal
+cual y se excluyen del pool antes de muestrear.
 
-No re-hace el experimento principal (49k) ni E5: únicamente produce un pool grande
-de vectores SciBERT del que 10_scalability.py toma subconjuntos anidados. Las 1000
-consultas del experimento original (query_scibert.npy) se reutilizan tal cual.
+Una vectorización de horas puede cortarse, así que guarda por tramos en --out (conviene
+que esté en Google Drive) y retoma donde quedó al volver a ejecutar. La muestra se baraja
+de forma fija: aunque no se llegue a terminar, los tramos hechos son una muestra aleatoria
+y sirven igual. --stop-after detiene el trabajo en esa cantidad de vectores sin cambiar la
+muestra, por ejemplo para no pasarse del espacio disponible. --start-at deja que otra cuenta
+de Google continúe el trabajo: la muestra es la misma y los tramos se juntan después.
 
-Ejecutar en Colab con GPU T4:
+Por defecto usa E5-base: es de la misma familia que E5-large y tarda cerca de la mitad.
 
-    !pip install -q datasets sentence-transformers pandas pyarrow
-    # subir config.py y colab_embed.py y colab_embed_scale.py
-    !python colab_embed_scale.py
-    from google.colab import files; files.download("embeddings_scale.zip")
+Salida en --out:
+    corpus_{modelo}_scale_meta.parquet   (id, major) en el orden de los vectores
+    part_{modelo}_{inicio}.npy           tramos de CHUNK vectores
 
-Descomprimir en E:\\TABD\\code\\data\\ -> deja:
-    data/corpus_scibert_scale.npy    (N_SCALE, 768)
-    data/corpus_scale_meta.parquet   (id, major)
+Los archivos van en E:\\TABD\\code\\data\\scale_{modelo}\\ en la máquina local.
 """
 
-import shutil
-import numpy as np
+import argparse
+import time
+from pathlib import Path
+
 import torch
-from datasets import load_dataset
 
 import config as cfg
+from encoders import load_encoder, encode
 from importlib import import_module
 
-_embed = import_module("colab_embed")  # reutiliza muestreo y vectorización
+_embed = import_module("colab_embed")  # reutiliza la ingesta y el muestreo
 
-N_SCALE = 100_000   # tamaño del pool para escalabilidad
 SCALE_SEED = cfg.SEED + 100
+CHUNK = 50_000
 
 
 def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--model", default="e5_base", choices=list(cfg.ALL_MODELS))
+    parser.add_argument("--n", type=int, default=1_000_000)
+    parser.add_argument("--start-at", type=int, default=0)
+    parser.add_argument("--stop-after", type=int, default=None)
+    parser.add_argument("--batch-size", type=int, default=cfg.BATCH_SIZE)
+    parser.add_argument("--out", type=Path, default=None)
+    args = parser.parse_args()
+    out = args.out or cfg.DATA_DIR / f"scale_{args.model}"
+    out.mkdir(parents=True, exist_ok=True)
+    cfg.BATCH_SIZE = args.batch_size
+
     device = "cuda" if torch.cuda.is_available() else "cpu"
     print(f">>> Dispositivo: {device}")
     if device != "cuda":
-        raise SystemExit("ERROR: sin GPU la vectorización de 100k tarda horas. "
-                         "Usa Colab con T4.")
+        raise SystemExit("ERROR: sin GPU la vectorización del pool tarda demasiado.")
 
-    print(f"Descargando {cfg.DATASET} ...")
-    ds = load_dataset(cfg.DATASET, split="train")
-    keep = [c for c in ds.column_names if c in ("id", "abstract", "categories")]
-    ds = ds.remove_columns([c for c in ds.column_names if c not in keep])
-    df = ds.to_pandas()
-    df["major"] = df["categories"].map(_embed.major_category)
-    df["abstract"] = df["abstract"].str.replace(r"\s+", " ", regex=True).str.strip()
-    df = df[df["abstract"].str.len() > 20]
-    print(f"Corpus completo: {len(df):,} abstracts")
+    df = _embed.load_dataframe()
+    df = df[~df["id"].isin(set(cfg.read_ids(cfg.query_ids_path())))]
+    subset = _embed.stratified_sample(df[["id", "abstract", "major"]], args.n, SCALE_SEED)
+    subset = subset.sort_values("id").sample(frac=1, random_state=SCALE_SEED).reset_index(drop=True)
+    subset[["id", "major"]].to_parquet(out / f"corpus_{args.model}_scale_meta.parquet")
+    print(f"Muestra de escalabilidad: {len(subset):,}", flush=True)
 
-    subset = _embed.stratified_sample(df[["id", "abstract", "major"]], N_SCALE, SCALE_SEED)
-    print(f"Muestra de escalabilidad: {len(subset):,}")
+    model = None
+    texts = subset["abstract"].tolist()
+    last = min(args.stop_after or len(texts), len(texts))
+    for start in range(args.start_at, last, CHUNK):
+        part = out / f"part_{args.model}_{start:08d}.npy"
+        if part.exists():
+            continue
+        if model is None:
+            model = load_encoder(args.model, device)
+        t0 = time.perf_counter()
+        emb = encode(args.model, model, texts[start:start + CHUNK], "doc", device, show_progress=False)
+        _embed.save_npy(part, emb)
+        print(f"  {min(start + CHUNK, len(texts)):,} / {last:,}  ({(time.perf_counter() - t0) / 60:.1f} min este tramo)",
+              flush=True)
 
-    subset[["id", "major"]].to_parquet(cfg.DATA_DIR / "corpus_scale_meta.parquet")
-
-    model = _embed.load_model("scibert", device)
-    emb = _embed.encode(model, subset["abstract"].tolist(), None, device)
-    np.save(cfg.DATA_DIR / "corpus_scibert_scale.npy", emb)
-    print(f"Guardado corpus_scibert_scale.npy {emb.shape}")
-
-    # Empaqueta solo los dos archivos nuevos
-    import zipfile
-    with zipfile.ZipFile("embeddings_scale.zip", "w", zipfile.ZIP_DEFLATED) as z:
-        z.write(cfg.DATA_DIR / "corpus_scibert_scale.npy", "corpus_scibert_scale.npy")
-        z.write(cfg.DATA_DIR / "corpus_scale_meta.parquet", "corpus_scale_meta.parquet")
-    print("Listo: embeddings_scale.zip")
+    print(f"Listo: {last:,} vectores en {out}")
 
 
 if __name__ == "__main__":

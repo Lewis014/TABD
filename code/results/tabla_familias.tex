@@ -1,0 +1,25 @@
+\begin{table}[tbp]
+\caption{Index families on the same queries and ground truth (one thread, one query at a time). Best R@10: highest Recall@10 over the search parameter; then the latency of the fastest setting reaching each target (--: not reached). Build time includes training.}\label{tab:familias}
+\centering
+\small
+\begin{tabular}{|l|c|c|c|c|c|}
+\hline
+\textbf{Family} & \textbf{Best R@10} & \textbf{ms, R@10$\geq$0.95} & \textbf{ms, R@10$\geq$0.99} & \textbf{Build (s)} & \textbf{MB} \\
+\hline
+\multicolumn{6}{|l|}{\textit{SciBERT}} \\
+Exact & 0.999 & 10.19 & 10.19 & 0.0 & 141 \\
+HNSW & 1.000 & 0.38 & 0.61 & 11.9 & 153 \\
+IVF-Flat & 1.000 & 0.58 & 2.03 & 2.7 & 144 \\
+IVF-PQ & 0.737 & -- & -- & 461.6 & 8 \\
+IVF-PQ+Refine & 1.000 & 0.51 & 1.21 & 461.6 & 149 \\
+BallTree & 0.999 & 46.85 & 46.85 & 5.7 & 294 \\
+\multicolumn{6}{|l|}{\textit{E5-large}} \\
+Exact & 1.000 & 12.38 & 12.38 & 0.0 & 188 \\
+HNSW & 0.999 & 0.46 & 0.73 & 19.2 & 200 \\
+IVF-Flat & 0.998 & 1.32 & 4.38 & 3.3 & 191 \\
+IVF-PQ & 0.611 & -- & -- & 653.1 & 12 \\
+IVF-PQ+Refine & 0.983 & 1.79 & -- & 653.1 & 199 \\
+BallTree & 1.000 & 59.64 & 59.64 & 9.3 & 392 \\
+\hline
+\end{tabular}
+\end{table}

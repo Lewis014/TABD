@@ -1,0 +1,18 @@
+\begin{table}[tbp]
+\caption{Domain against training objective at the reference configuration ($M=32$, \textit{ef\_c}$=100$, \textit{ef\_s}$=100$). Fidelity: abstract$\rightarrow$abstract Recall@10 of HNSW against exact search, and search latency on one thread. Retrieval: title$\rightarrow$abstract with exact search.}\label{tab:modelos}
+\centering
+\small
+\begin{tabular}{|l|l|l|c|c|c|c|c|c|}
+\hline
+\multicolumn{4}{|c|}{} & \multicolumn{2}{c|}{\textbf{Fidelity}} & \multicolumn{3}{c|}{\textbf{Retrieval}} \\ \cline{5-9}
+\textbf{Model} & \textbf{Domain} & \textbf{Training} & \textbf{Dim.} & \textbf{R@10} & \textbf{ms} & \textbf{R@1} & \textbf{R@10} & \textbf{MRR@10} \\
+\hline
+SciBERT & Scientific & None & 768 & 0.997 & 0.60 & 0.061 & 0.173 & 0.093 \\
+SciNCL & Scientific & Citations & 768 & 0.998 & 0.45 & 0.527 & 0.746 & 0.600 \\
+SPECTER2 & Scientific & Citations & 768 & 0.998 & 0.63 & 0.539 & 0.754 & 0.607 \\
+BERT & General & None & 768 & 0.996 & 0.58 & 0.064 & 0.175 & 0.094 \\
+E5-base & General & Query--passage & 768 & 0.986 & 0.75 & 0.813 & 0.922 & 0.851 \\
+E5-large & General & Query--passage & 1024 & 0.992 & 0.87 & 0.869 & 0.949 & 0.899 \\
+\hline
+\end{tabular}
+\end{table}

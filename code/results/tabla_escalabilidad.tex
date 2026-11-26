@@ -1,0 +1,37 @@
+\begin{table}[tbp]
+\caption{Latency against corpus size (SciBERT, $M=32$, \textit{ef\_c}$=100$). Exact and HNSW latency in ms, one thread and one query at a time; HNSW uses the smallest \textit{ef\_search} reaching each Recall@10 target. Gain: speedup over exact search; Batch: the same with all queries together on 12 threads. Build time (s, 6 threads) and memory (MB) of the index.}\label{tab:escalabilidad_scibert}
+\centering
+\small
+\begin{tabular}{|r|c|c|c|c|c|c|c|c|c|c|c|}
+\hline
+ & & \multicolumn{4}{c|}{\textbf{R@10 $\geq$ 0.95}} & \multicolumn{4}{c|}{\textbf{R@10 $\geq$ 0.99}} & & \\ \cline{3-10}
+\textbf{$N$} & \textbf{Exact} & \textbf{\textit{ef\_s}} & \textbf{ms} & \textbf{Gain} & \textbf{Batch} & \textbf{\textit{ef\_s}} & \textbf{ms} & \textbf{Gain} & \textbf{Batch} & \textbf{Build} & \textbf{MB} \\
+\hline
+5,000 & 1.07 & 20 & 0.10 & 11$\times$ & 1.8$\times$ & 50 & 0.16 & 7$\times$ & 1.0$\times$ & 0 & 16 \\
+10,000 & 2.13 & 20 & 0.12 & 18$\times$ & 1.4$\times$ & 50 & 0.21 & 10$\times$ & 0.7$\times$ & 1 & 32 \\
+20,000 & 3.81 & 30 & 0.20 & 19$\times$ & 1.1$\times$ & 50 & 0.27 & 14$\times$ & 0.7$\times$ & 3 & 64 \\
+50,000 & 10.74 & 30 & 0.27 & 40$\times$ & 1.7$\times$ & 75 & 0.50 & 22$\times$ & 0.9$\times$ & 12 & 159 \\
+99,697 & 20.79 & 50 & 0.41 & 51$\times$ & 1.8$\times$ & 100 & 0.73 & 29$\times$ & 1.2$\times$ & 34 & 318 \\
+\hline
+\end{tabular}
+\end{table}
+
+\begin{table}[tbp]
+\caption{Latency against corpus size (E5-base, $M=32$, \textit{ef\_c}$=100$). Exact and HNSW latency in ms, one thread and one query at a time; HNSW uses the smallest \textit{ef\_search} reaching each Recall@10 target. Gain: speedup over exact search; Batch: the same with all queries together on 12 threads. Build time (s, 6 threads) and memory (MB) of the index.}\label{tab:escalabilidad_e5_base}
+\centering
+\small
+\begin{tabular}{|r|c|c|c|c|c|c|c|c|c|c|c|}
+\hline
+ & & \multicolumn{4}{c|}{\textbf{R@10 $\geq$ 0.95}} & \multicolumn{4}{c|}{\textbf{R@10 $\geq$ 0.99}} & & \\ \cline{3-10}
+\textbf{$N$} & \textbf{Exact} & \textbf{\textit{ef\_s}} & \textbf{ms} & \textbf{Gain} & \textbf{Batch} & \textbf{\textit{ef\_s}} & \textbf{ms} & \textbf{Gain} & \textbf{Batch} & \textbf{Build} & \textbf{MB} \\
+\hline
+5,000 & 1.10 & 30 & 0.16 & 7$\times$ & 1.1$\times$ & 75 & 0.28 & 4$\times$ & 0.6$\times$ & 0 & 16 \\
+10,000 & 2.17 & 50 & 0.30 & 7$\times$ & 0.5$\times$ & 100 & 0.50 & 4$\times$ & 0.3$\times$ & 1 & 32 \\
+20,000 & 3.83 & 50 & 0.34 & 11$\times$ & 0.5$\times$ & 100 & 0.63 & 6$\times$ & 0.3$\times$ & 4 & 64 \\
+50,000 & 9.88 & 75 & 0.66 & 15$\times$ & 0.6$\times$ & 150 & 1.12 & 9$\times$ & 0.4$\times$ & 18 & 159 \\
+100,000 & 21.18 & 75 & 0.74 & 29$\times$ & 1.0$\times$ & 200 & 1.51 & 14$\times$ & 0.5$\times$ & 45 & 319 \\
+200,000 & 42.70 & 75 & 0.81 & 53$\times$ & 1.9$\times$ & 300 & 2.44 & 17$\times$ & 0.6$\times$ & 104 & 638 \\
+500,000 & 106.88 & 75 & 1.00 & 107$\times$ & 4.8$\times$ & 300 & 3.34 & 32$\times$ & 1.3$\times$ & 299 & 1595 \\
+\hline
+\end{tabular}
+\end{table}

@@ -1,0 +1,4 @@
+model,curve,n_points,slope,ci95_low,ci95_high,r2
+scibert,exact,5,0.9964,0.9202,1.0726,0.9983
+scibert,hnsw@0.95,5,0.4768,0.3716,0.582,0.9858
+scibert,hnsw@0.99,5,0.5195,0.4124,0.6266,0.9876

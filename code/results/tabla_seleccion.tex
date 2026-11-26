@@ -1,0 +1,23 @@
+\begin{table}[tbp]
+\caption{Cheapest operating point per model and Recall@10 target, for each cost (latency per query, one thread).}\label{tab:seleccion}
+\centering
+\small
+\begin{tabular}{|l|c|l|c|c|c|c|c|c|}
+\hline
+\textbf{Model} & \textbf{Target} & \textbf{Minimizes} & \textbf{$M$} & \textbf{\textit{ef\_c}} & \textbf{\textit{ef\_s}} & \textbf{Lat. (ms)} & \textbf{Build (s)} & \textbf{MB} \\
+\hline
+E5-large & 0.95 & latency & 16 & 100 & 50 & 0.37 & 15.6 & 194 \\
+E5-large & 0.95 & build time & 8 & 100 & 200 & 0.73 & 9.8 & 191 \\
+E5-large & 0.95 & memory & 8 & 100 & 200 & 0.73 & 9.8 & 191 \\
+E5-large & 0.99 & latency & 32 & 100 & 100 & 0.87 & 19.7 & 200 \\
+E5-large & 0.99 & build time & 16 & 100 & 200 & 1.13 & 15.6 & 194 \\
+E5-large & 0.99 & memory & 8 & 200 & 400 & 1.32 & 16.8 & 191 \\
+SciBERT & 0.95 & latency & 16 & 100 & 50 & 0.28 & 10.0 & 147 \\
+SciBERT & 0.95 & build time & 8 & 100 & 100 & 0.32 & 7.0 & 144 \\
+SciBERT & 0.95 & memory & 8 & 200 & 100 & 0.31 & 12.1 & 144 \\
+SciBERT & 0.99 & latency & 32 & 400 & 50 & 0.43 & 35.4 & 153 \\
+SciBERT & 0.99 & build time & 8 & 100 & 400 & 1.07 & 7.0 & 144 \\
+SciBERT & 0.99 & memory & 8 & 200 & 200 & 0.55 & 12.1 & 144 \\
+\hline
+\end{tabular}
+\end{table}

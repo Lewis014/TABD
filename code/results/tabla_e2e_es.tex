@@ -1,0 +1,17 @@
+\begin{table}[tbp]
+\caption{Latencia de extremo a extremo por consulta en la CPU, en ms, sobre 200 textos vectorizados uno a uno con 6 hilos, seguida de la búsqueda HNSW con un hilo ($M=32$, \textit{ef\_c}$=100$, \textit{ef\_s}$=100$). Vectorizar ocupa el 98.1--99.8\,\% del total.}\label{tab:e2e}
+\centering
+\small
+\begin{tabular}{|l|c|c|c|c|c|c|c|c|}
+\hline
+ & \multicolumn{4}{c|}{\textbf{Título}} & \multicolumn{4}{c|}{\textbf{Abstract}} \\ \cline{2-9}
+\textbf{Modelo} & \textbf{Vect.} & \textbf{p95} & \textbf{Búsq.} & \textbf{Total} & \textbf{Vect.} & \textbf{p95} & \textbf{Búsq.} & \textbf{Total} \\
+\hline
+SciBERT & 37 & 43 & 0.46 & 37 & 149 & 266 & 0.68 & 150 \\
+E5-large & 165 & 189 & 0.85 & 166 & 562 & 993 & 0.94 & 563 \\
+SciNCL & 45 & 55 & 0.56 & 46 & 154 & 284 & 0.49 & 155 \\
+BERT & 46 & 53 & 0.41 & 46 & 165 & 301 & 0.49 & 165 \\
+E5-base & 47 & 57 & 0.91 & 48 & 159 & 279 & 0.87 & 160 \\
+\hline
+\end{tabular}
+\end{table}

@@ -3,69 +3,65 @@ Genera las figuras analíticas del artículo a partir de results.csv.
 
 Salida (carpeta ../Images):
   fig_recall_vs_m.png       Recall@10 frente a M (efecto del factor dominante)
-  fig_recall_latency.png    Compromiso Recall@10 vs latencia (las 36 configuraciones)
+  fig_recall_latency.png    Compromiso Recall@10 vs latencia (los 108 puntos de operación)
 
 Ejecutar:
     python 06_plots.py
 """
 
-from pathlib import Path
 import pandas as pd
 import matplotlib.pyplot as plt
 
-RESULTS = Path(__file__).parent / "results" / "results.csv"
-IMAGES = Path(__file__).parent.parent / "Images"
-IMAGES.mkdir(exist_ok=True)
+import config as cfg
+import plot_style as ps
 
-df = pd.read_csv(RESULTS)
-
-# Etiquetas y estilo por (modelo, métrica)
-combos = [
-    ("scibert", "cosine", "SciBERT · coseno", "o", "-"),
-    ("scibert", "l2", "SciBERT · L2", "s", "--"),
-    ("e5", "cosine", "E5-large · coseno", "^", "-"),
-    ("e5", "l2", "E5-large · L2", "D", "--"),
-]
-COLOR = {"scibert": "#1f77b4", "e5": "#d62728"}
+ps.apply()
+df = pd.read_csv(cfg.results_csv_path())
+ref = cfg.load_reference()
 
 
 # ---------------------------------------------------------------------------
-# Figura 1: Recall@10 frente a M (con ef_construction = 400)
+# Recall@10 frente a M, en el ef_construction y ef_search de referencia
 # ---------------------------------------------------------------------------
-fig, ax = plt.subplots(figsize=(6, 4))
-sub = df[df["ef_construction"] == 400]
-for model, metric, label, marker, ls in combos:
-    d = sub[(sub["model"] == model) & (sub["metric"] == metric)].sort_values("M")
-    ax.plot(d["M"], d["recall@10"], marker=marker, linestyle=ls,
-            color=COLOR[model], label=label, linewidth=1.8, markersize=7)
+fig, ax = plt.subplots(figsize=(5.2, 3.2))
+sub = df[(df["ef_construction"] == ref["ef_construction"]) & (df["ef_search"] == ref["ef_search"])]
+for model in cfg.MODELS:
+    d = sub[sub["model"] == model].sort_values("M")
+    ax.errorbar(d["M"], d["recall@10"], yerr=d["recall@10_sd"], marker=ps.MODEL_MARKER[model],
+                color=ps.MODEL_COLOR[model], label=cfg.MODELS[model]["label"], capsize=2)
+    last = d.iloc[-1]
+    ax.annotate(cfg.MODELS[model]["label"], (last["M"], last["recall@10"]), xytext=(6, 0),
+                textcoords="offset points", va="center", fontsize=8)
 
-ax.set_xlabel("M (conexiones por nodo)")
+ax.set_xlabel("$M$ (connections per node)")
 ax.set_ylabel("Recall@10")
-ax.set_xticks([8, 16, 32])
-ax.set_ylim(0.94, 1.001)
-ax.grid(True, alpha=0.3)
-ax.legend(fontsize=8, loc="lower right")
-ax.set_title("Recall@10 según M (ef_construction = 400)", fontsize=10)
-fig.tight_layout()
-fig.savefig(IMAGES / "fig_recall_vs_m.png", dpi=200)
-print("Guardado:", IMAGES / "fig_recall_vs_m.png")
+ax.set_xscale("log", base=2)
+ax.set_xticks(cfg.M_VALUES)
+ax.set_xticklabels(cfg.M_VALUES)
+ax.set_xlim(7, 48)
+ps.save(fig, "fig_recall_vs_m.png")
 
 
 # ---------------------------------------------------------------------------
-# Figura 2: Compromiso Recall@10 vs latencia (las 36 configuraciones)
+# Compromiso Recall@10 vs latencia (todos los puntos de operación)
 # ---------------------------------------------------------------------------
-fig, ax = plt.subplots(figsize=(6, 4))
-for model, metric, label, marker, ls in combos:
-    d = df[(df["model"] == model) & (df["metric"] == metric)]
-    ax.scatter(d["latency_ms"], d["recall@10"], marker=marker,
-               color=COLOR[model], label=label, s=55, alpha=0.8,
+fig, ax = plt.subplots(figsize=(5.2, 3.4))
+for model in cfg.MODELS:
+    d = df[df["model"] == model]
+    ax.scatter(d["latency_ms"], d["recall@10"], marker=ps.MODEL_MARKER[model], s=26,
+               color=ps.MODEL_COLOR[model], label=cfg.MODELS[model]["label"],
                edgecolors="white", linewidths=0.6)
 
-ax.set_xlabel("Latencia por consulta (ms)")
+    r = d[(d["M"] == ref["M"]) & (d["ef_construction"] == ref["ef_construction"]) &
+          (d["ef_search"] == ref["ef_search"])].iloc[0]
+    ax.scatter(r["latency_ms"], r["recall@10"], s=90, facecolors="none",
+               edgecolors=ps.INK, linewidths=1.0, zorder=3)
+
+ax.annotate(f"Reference: $M$={ref['M']}, ef_c={ref['ef_construction']}, ef_s={ref['ef_search']}",
+            xy=(0.98, 0.04), xycoords="axes fraction", ha="right", fontsize=8, color=ps.INK_SOFT)
+ax.set_xscale("log")
+ps.plain_ticks(ax.xaxis, [0.1, 0.2, 0.5, 1, 2])
+ax.set_xlabel("Latency per query (ms, one thread, log scale)")
 ax.set_ylabel("Recall@10")
-ax.grid(True, alpha=0.3)
-ax.legend(fontsize=8, loc="lower right")
-ax.set_title("Compromiso exactitud–latencia (36 configuraciones)", fontsize=10)
-fig.tight_layout()
-fig.savefig(IMAGES / "fig_recall_latency.png", dpi=200)
-print("Guardado:", IMAGES / "fig_recall_latency.png")
+ax.legend(loc="center right")
+ps.save(fig, "fig_recall_latency.png")

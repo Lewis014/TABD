@@ -1,10 +1,12 @@
 """
 Demo Streamlit — Búsqueda semántica de abstracts científicos con HNSW.
 
-Reutiliza los embeddings ya generados (SciBERT) y construye el índice HNSW con la
-configuración ÓPTIMA hallada en el experimento: coseno, M=32, ef_construction=400.
-El usuario escribe una consulta, se vectoriza con SciBERT y se recuperan los
-abstracts más parecidos en milisegundos.
+Reutiliza los embeddings ya generados (E5-large) y construye el índice HNSW con M y
+ef_construction de la configuración de referencia. Se usa E5-large ---y no SciBERT---
+porque recupera mucho mejor ante consultas cortas en lenguaje natural, que es el caso de
+uso de esta demo (véase la evaluación known-item del paper). El usuario escribe una
+consulta, se vectoriza con E5-large y se recuperan los abstracts más parecidos. La
+interfaz muestra por separado lo que tarda cada paso.
 
 Ejecutar:
     pip install -r requirements_app.txt
@@ -16,49 +18,50 @@ import numpy as np
 import pandas as pd
 import streamlit as st
 import faiss
-from sentence_transformers import SentenceTransformer, models
+from sentence_transformers import SentenceTransformer
 
 import config as cfg
 
-# Configuración ganadora del experimento (Sección 5 del paper)
-BEST = {"model": "scibert", "metric": "cosine", "M": 32, "ef_construction": 400}
+MODEL = "e5"
+REF = cfg.load_reference()
 
-st.set_page_config(page_title="Búsqueda semántica HNSW", layout="centered")
+st.set_page_config(page_title="HNSW semantic search", layout="centered")
 
 
 # ---------------------------------------------------------------------------
 # Carga de recursos (una sola vez por sesión)
 # ---------------------------------------------------------------------------
-@st.cache_resource(show_spinner="Cargando modelo SciBERT...")
+@st.cache_resource(show_spinner="Loading E5-large...")
 def load_model() -> SentenceTransformer:
-    spec = cfg.MODELS["scibert"]
-    word = models.Transformer(spec["hf"], max_seq_length=cfg.MAX_SEQ_LEN)
-    pool = models.Pooling(word.get_word_embedding_dimension(), pooling_mode="mean")
-    return SentenceTransformer(modules=[word, pool], device="cpu")
+    model = SentenceTransformer(cfg.MODELS[MODEL]["hf"], device="cpu")
+    model.max_seq_length = cfg.MAX_SEQ_LEN
+    return model
 
 
-@st.cache_resource(show_spinner="Construyendo índice HNSW (una vez)...")
+@st.cache_resource(show_spinner="Building the HNSW index (once)...")
 def load_index() -> faiss.Index:
-    emb = np.load(cfg.corpus_emb_path("scibert")).astype(np.float32)
+    emb = np.load(cfg.corpus_emb_path(MODEL)).astype(np.float32)
     faiss.normalize_L2(emb)  # coseno = producto interno sobre vectores normalizados
-    index = faiss.IndexHNSWFlat(emb.shape[1], BEST["M"], faiss.METRIC_INNER_PRODUCT)
-    index.hnsw.efConstruction = BEST["ef_construction"]
+    index = faiss.IndexHNSWFlat(emb.shape[1], REF["M"], faiss.METRIC_INNER_PRODUCT)
+    index.hnsw.efConstruction = REF["ef_construction"]
     index.add(emb)
     return index
 
 
-@st.cache_data(show_spinner="Cargando textos...")
+@st.cache_data(show_spinner="Loading texts...")
 def load_docs() -> pd.DataFrame:
     # corpus_meta conserva el orden de los .npy; le pegamos el texto por id.
     meta = pd.read_parquet(cfg.corpus_meta_path())
-    text = pd.read_parquet(cfg.DATA_DIR / "corpus_text.parquet")
+    text = pd.read_parquet(cfg.text_path())
     meta["id"] = meta["id"].astype(str)
     text["id"] = text["id"].astype(str)
     return meta.merge(text, on="id", how="left")
 
 
 def embed_query(model: SentenceTransformer, q: str) -> np.ndarray:
-    v = model.encode([q], convert_to_numpy=True).astype(np.float32)
+    # E5 exige el prefijo "query: " en las consultas (los documentos del corpus se
+    # vectorizaron con "passage: "); omitirlo degrada la calidad.
+    v = model.encode(["query: " + q], convert_to_numpy=True).astype(np.float32)
     faiss.normalize_L2(v)
     return v
 
@@ -70,53 +73,58 @@ model = load_model()
 index = load_index()
 docs = load_docs()
 
-st.title("Búsqueda semántica de abstracts científicos mediante indexación HNSW")
+st.title("Semantic search of scientific abstracts with HNSW")
 st.caption(
-    f"Demo sobre {len(docs):,} abstracts de arXiv · SciBERT (768d) · "
-    "FAISS-HNSW · similitud coseno · configuración óptima (M=32, ef\\_c=400)"
+    f"{len(docs):,} arXiv abstracts · E5-large (1024d) · FAISS-HNSW · cosine similarity · "
+    f"M={REF['M']}, ef\\_construction={REF['ef_construction']}"
 )
 
-st.session_state.setdefault("query", "")
+# ?q=... permite abrir la demo con una consulta ya escrita
+st.session_state.setdefault("query", st.query_params.get("q", ""))
 
 # Consultas sugeridas (rellenan la caja al pulsarlas)
-sugeridas = [
+suggested = [
     "quantum field theory",
     "machine learning for particle physics",
     "gravitational waves detection",
 ]
-st.write("Consultas sugeridas:")
-cols = st.columns(len(sugeridas))
-for c, s in zip(cols, sugeridas):
+st.write("Suggested queries:")
+cols = st.columns(len(suggested))
+for c, s in zip(cols, suggested):
     if c.button(s, use_container_width=True):
         st.session_state.query = s
         st.rerun()
 
-query = st.text_input("Escribe tu consulta:", key="query")
+query = st.text_input("Type your query:", key="query")
 
 c1, c2 = st.columns(2)
-k = c1.slider("k (número de resultados)", 1, 20, 8)
-ef = c2.slider("ef\\_search (amplitud de búsqueda)", 10, 10000, 50, step=10)
+k = c1.slider("k (number of results)", 1, 20, 8)
+ef = c2.slider("ef\\_search (search breadth)", 10, 800, REF["ef_search"], step=10)
 
 # ---------------------------------------------------------------------------
 # Búsqueda
 # ---------------------------------------------------------------------------
 if query.strip():
+    t0 = time.perf_counter()
     qv = embed_query(model, query)
+    encode_ms = (time.perf_counter() - t0) * 1000
+
     index.hnsw.efSearch = ef
     t0 = time.perf_counter()
     scores, ids = index.search(qv, k)
-    latency_ms = (time.perf_counter() - t0) * 1000
+    search_ms = (time.perf_counter() - t0) * 1000
 
-    m1, m2 = st.columns(2)
-    m1.metric("Latencia de búsqueda", f"{latency_ms:.1f} ms")
-    m2.metric("Resultados", k)
+    m1, m2, m3 = st.columns(3)
+    m1.metric("Query encoding", f"{encode_ms:.1f} ms")
+    m2.metric("Index search", f"{search_ms:.2f} ms")
+    m3.metric("Results", k)
 
-    st.subheader(f"{k} resultados ordenados por similitud coseno")
+    st.subheader(f"Top {k} results by cosine similarity")
     for rank, (i, sc) in enumerate(zip(ids[0], scores[0]), start=1):
         if i < 0:
             continue
         row = docs.iloc[int(i)]
-        title = row.get("title") if isinstance(row.get("title"), str) else "(sin título)"
+        title = row.get("title") if isinstance(row.get("title"), str) else "(untitled)"
         cat = row.get("major") if isinstance(row.get("major"), str) else ""
         abstract = row.get("abstract") if isinstance(row.get("abstract"), str) else ""
         snippet = abstract[:400] + ("…" if len(abstract) > 400 else "")
@@ -132,7 +140,7 @@ if query.strip():
             links.append(f"DOI: [{d}](https://doi.org/{d})")
 
         st.markdown(f"**{rank}. {title}**")
-        meta_line = f"{cat}  ·  similitud {sc:.3f}"
+        meta_line = f"{cat}  ·  similarity {sc:.3f}"
         if links:
             meta_line += "  ·  " + "  ".join(links)
         st.caption(meta_line)
@@ -140,4 +148,4 @@ if query.strip():
             st.write(snippet)
         st.divider()
 else:
-    st.info("Escribe una consulta o pulsa una de las sugeridas para empezar.")
+    st.info("Type a query or pick a suggested one to start.")
