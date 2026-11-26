@@ -4,6 +4,9 @@ code/corpus_meta.parquet
 *.npy
 *.zip
 
+# Paquete de envío: lo regenera code/make_submission.py
+envio_54/
+
 # Configuración local de Claude Code
 .claude/
 

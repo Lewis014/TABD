@@ -34,6 +34,7 @@ ArXiv (2M) --[GPU]--> muestra con ids congelados --> 48 018 de corpus + 1 000 co
 | `13_factorial_models.py` | local | Dominio frente a objetivo de entrenamiento |
 | `14_tables.py` | local | Tablas LaTeX del artículo (`results/tabla_*.tex`) |
 | `15_tables_es.py` | local | Las mismas tablas en español para `paper.tex` (`tabla_*_es.tex`) |
+| `make_submission.py` | local | Paquete de envío en `../envio_54/`: `54.tex` con las tablas dentro, figuras, `54.pdf` y `54.zip` |
 | `06_plots.py`, `06b`, `07b`, `09c`, `10b`, `12b` | local | Figuras en `../Images` |
 | `app.py` | local | Demo Streamlit |
 
