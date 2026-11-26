@@ -7,6 +7,9 @@ code/corpus_meta.parquet
 # Paquete de envío: lo regenera code/make_submission.py
 envio_54/
 
+# PDF de la versión IJACSA: se compilan desde ijacsa/54_ijacsa*.tex
+ijacsa/*.pdf
+
 # Configuración local de Claude Code
 .claude/
 
